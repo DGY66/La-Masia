@@ -152,31 +152,6 @@ class UCLApiClient:
         return payload
 
     def _parse_standings(self, data: dict[str, Any]) -> list[Team]:
-        """
-        Parse SofaScore API response into Team objects.
-
-        Expected structure:
-        {
-          "standings": [
-            {
-              "rows": [
-                {
-                  "team": {"name": "...", "shortName": "...", "nameCode": "..."},
-                  "matches": int,
-                  "wins": int,
-                  "draws": int,
-                  "losses": int,
-                  "scoresFor": int,
-                  "scoresAgainst": int,
-                  "points": int,
-                  "form": ["W", "D", "L", ...] or "WWLDW"
-                }
-              ]
-            }
-          ]
-        }
-        """
-        # Extract timestamp (use current time as API doesn't provide updatedAtTimestamp)
         try:
             dt = datetime.now()
             self._last_update = dt.strftime("%d %b %Y, %H:%M")
@@ -241,16 +216,8 @@ class UCLApiClient:
         return teams
 
     def _fetch_team_forms(self, teams: list[Team]) -> None:
-        """
-        Fetch last 5 UCL matches for each team to determine form.
-
-        Args:
-            teams: List of Team objects to populate with form data
-        """
         for idx, team in enumerate(teams):
             try:
-                # Extract team ID from team object (we need to get it from the API)
-                # For now, we'll fetch team events and filter UCL matches
                 team_id = self._get_team_id(team.name)
                 if not team_id:
                     logger.debug(f"Could not find team ID for {team.name}, skipping form")
@@ -315,14 +282,6 @@ class UCLApiClient:
                 continue
 
     def _get_team_id(self, team_name: str) -> int | None:
-        """
-        Map team names to SofaScore team IDs.
-
-        Args:
-            team_name: Name of the team
-
-        Returns:
-            Team ID or None if not found
         """
         # SofaScore team IDs for major UCL clubs
         team_ids = {
