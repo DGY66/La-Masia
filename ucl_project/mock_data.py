@@ -1,49 +1,11 @@
-"""Mock data for when API is unavailable (rate limited)"""
+from __future__ import annotations
+
 from models import Team
 
-def get_mock_teams() -> list[Team]:
-    """Return mock UCL standings data (2024/25 season)"""
-    mock_data = [
-        ("LIV", "Liverpool", 8, 7, 0, 1, 17, 5, 21, ["L", "W", "W", "L", "W"]),
-        ("BAR", "Barcelona", 8, 6, 1, 1, 28, 13, 19, ["L", "W", "D", "L", "W"]),
-        ("ARS", "Arsenal", 8, 6, 1, 1, 16, 3, 19, ["W", "W", "W", "W", "W"]),
-        ("INT", "Inter", 8, 6, 1, 1, 11, 1, 19, ["W", "W", "L", "L", "L"]),
-        ("BAY", "Bayern München", 8, 6, 0, 2, 19, 8, 18, ["W", "W", "L", "W", "W"]),
-        ("RMA", "Real Madrid", 8, 5, 2, 1, 18, 11, 17, ["W", "D", "W", "D", "W"]),
-        ("MCI", "Manchester City", 8, 5, 1, 2, 15, 9, 16, ["W", "L", "W", "W", "L"]),
-        ("PSG", "Paris Saint Germain", 8, 4, 3, 1, 12, 8, 15, ["D", "W", "D", "W", "D"]),
-        ("JUV", "Juventus", 8, 4, 2, 2, 13, 7, 14, ["W", "W", "D", "L", "D"]),
-        ("ATM", "Atletico Madrid", 8, 4, 2, 2, 15, 11, 14, ["L", "W", "D", "W", "W"]),
-        ("ATA", "Atalanta", 8, 4, 2, 2, 14, 8, 14, ["W", "D", "W", "L", "D"]),
-        ("LEV", "Bayer Leverkusen", 8, 4, 1, 3, 13, 10, 13, ["W", "W", "L", "L", "W"]),
-        ("BVB", "Borussia Dortmund", 8, 4, 1, 3, 18, 11, 13, ["L", "W", "W", "W", "L"]),
-        ("CHE", "Chelsea", 8, 4, 1, 3, 16, 13, 13, ["W", "L", "W", "W", "L"]),
-        ("MIL", "AC Milan", 8, 4, 0, 4, 12, 12, 12, ["L", "W", "W", "L", "W"]),
-        ("TOT", "Tottenham", 8, 3, 2, 3, 13, 11, 11, ["D", "W", "L", "W", "D"]),
-        ("POR", "Porto", 8, 3, 2, 3, 11, 12, 11, ["L", "D", "W", "W", "D"]),
-        ("LEI", "RB Leipzig", 8, 3, 1, 4, 9, 10, 10, ["L", "W", "L", "W", "W"]),
-        ("NAP", "Napoli", 8, 3, 1, 4, 8, 12, 10, ["L", "L", "W", "W", "L"]),
-        ("BEN", "Benfica", 8, 3, 0, 5, 10, 14, 9, ["W", "L", "L", "W", "L"]),
-        ("SPO", "Sporting CP", 8, 2, 3, 3, 11, 12, 9, ["D", "L", "W", "D", "D"]),
-        ("PSV", "PSV Eindhoven", 8, 2, 2, 4, 10, 13, 8, ["W", "L", "D", "L", "D"]),
-        ("FEY", "Feyenoord", 8, 2, 2, 4, 9, 16, 8, ["L", "D", "W", "L", "D"]),
-        ("MON", "Monaco", 8, 2, 1, 5, 8, 13, 7, ["L", "W", "L", "L", "W"]),
-        ("FRA", "Eintracht Frankfurt", 8, 2, 1, 5, 10, 18, 7, ["L", "L", "W", "L", "W"]),
-        ("BRU", "Club Brugge", 8, 2, 1, 5, 7, 15, 7, ["L", "W", "L", "L", "D"]),
-        ("OLY", "Olympiacos", 8, 2, 0, 6, 6, 16, 6, ["L", "L", "W", "L", "W"]),
-        ("GAL", "Galatasaray", 8, 1, 2, 5, 8, 17, 5, ["W", "D", "L", "L", "D"]),
-        ("AJA", "Ajax", 8, 1, 1, 6, 7, 18, 4, ["L", "L", "W", "L", "L"]),
-        ("MAR", "Marseille", 8, 1, 1, 6, 6, 19, 4, ["L", "L", "L", "W", "L"]),
-        ("COP", "Copenhagen", 8, 1, 0, 7, 5, 20, 3, ["L", "L", "L", "W", "L"]),
-        ("UNI", "Union SG", 8, 0, 2, 6, 4, 17, 2, ["D", "L", "L", "L", "D"]),
-        ("SLA", "Slavia Praha", 8, 0, 1, 7, 3, 21, 1, ["L", "L", "L", "L", "D"]),
-        ("ATH", "Athletic Club", 8, 0, 1, 7, 4, 22, 1, ["L", "L", "D", "L", "L"]),
-        ("NEW", "Newcastle", 8, 0, 0, 8, 2, 23, 0, ["L", "L", "L", "L", "L"]),
-        ("PAF", "Pafos", 8, 0, 0, 8, 1, 24, 0, ["L", "L", "L", "L", "L"]),
-    ]
 
-    teams = []
-    for abbr, name, pld, w, d, l, gf, ga, pts, form in mock_data:
+def _build_teams(rows: list[tuple[str, str, int, int, int, int, int, int, int, list[str]]]) -> list[Team]:
+    teams: list[Team] = []
+    for abbr, name, pld, w, d, l, gf, ga, pts, form in rows:
         team = Team(abbr, name)
         team.pld = pld
         team.w = w
@@ -54,5 +16,130 @@ def get_mock_teams() -> list[Team]:
         team.pts = pts
         team.form = form
         teams.append(team)
-
     return teams
+
+
+def get_mock_teams(competition_key: str) -> list[Team]:
+    if competition_key == "uel":
+        return _build_teams(_UEL_MOCK_DATA)
+    if competition_key == "uecl":
+        return _build_teams(_UECL_MOCK_DATA)
+    return _build_teams(_UCL_MOCK_DATA)
+
+
+_UCL_MOCK_DATA = [
+    ("AR", "Arsenal Fc", 0, 0, 0, 0, 0, 0, 0, ["W", "W", "W", "W", "W"]),
+    ("BM", "Bayern München", 0, 0, 0, 0, 0, 0, 0, ["W", "L", "W", "W", "W"]),
+    ("LP", "Liverpool", 0, 0, 0, 0, 0, 0, 0, ["W", "L", "W", "W", "W"]),
+    ("TH", "Tottenham", 0, 0, 0, 0, 0, 0, 0, ["W", "L", "W", "W", "W"]),
+    ("BL", "Barcelona", 0, 0, 0, 0, 0, 0, 0, ["D", "L", "W", "W", "W"]),
+    ("CH", "Chelsea", 0, 0, 0, 0, 0, 0, 0, ["D", "L", "W", "W", "W"]),
+    ("SP", "Sporting CP", 0, 0, 0, 0, 0, 0, 0, ["D", "L", "W", "W", "W"]),
+    ("MC", "Manchester City", 0, 0, 0, 0, 0, 0, 0, ["W", "L", "W", "L", "W"]),
+    ("RM", "Real Madrid", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "L", "W", "L"]),
+    ("IN", "Inter", 0, 0, 0, 0, 0, 0, 0, ["W", "L", "L", "L", "W"]),
+    ("PS", "Paris", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "D", "L", "D"]),
+    ("NC", "Newcastle", 0, 0, 0, 0, 0, 0, 0, ["W", "L", "D", "W", "D"]),
+    ("JU", "Juventus", 0, 0, 0, 0, 0, 0, 0, ["D", "W", "W", "W", "D"]),
+    ("AL", "Atletico", 0, 0, 0, 0, 0, 0, 0, ["W", "W", "W", "D", "L"]),
+    ("CH", "Atalanta", 0, 0, 0, 0, 0, 0, 0, ["W", "W", "W", "L", "L"]),
+    ("LK", "Leverkusen", 0, 0, 0, 0, 0, 0, 0, ["W", "W", "D", "L", "W"]),
+    ("DM", "B.Dortmund", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "D", "L", "L"]),
+    ("OM", "Olympiacos", 0, 0, 0, 0, 0, 0, 0, ["D", "L", "W", "W", "W"]),
+    ("PS", "Club Brugge", 0, 0, 0, 0, 0, 0, 0, ["D", "L", "L", "W", "W"]),
+    ("GL", "Galatasaray", 0, 0, 0, 0, 0, 0, 0, ["W", "L", "L", "D", "L"]),
+    ("MO", "Monaco", 0, 0, 0, 0, 0, 0, 0, ["W", "D", "W", "L", "D"]),
+    ("QA", "Qarabağ", 0, 0, 0, 0, 0, 0, 0, ["D", "L", "L", "W", "L"]),
+    ("BO", "Bodø/Glimt", 0, 0, 0, 0, 0, 0, 0, ["L", "L", "D", "W", "W"]),
+    ("BE", "Benfica", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "W", "L", "W"]),
+    ("MA", "Marseille", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "W", "L", "L"]),
+    ("PA", "Pafos", 0, 0, 0, 0, 0, 0, 0, ["W", "D", "L", "L", "W"]),
+    ("UN", "Union SG", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "L", "L", "W"]),
+    ("PV", "PSV", 0, 0, 0, 0, 0, 0, 0, ["D", "W", "L", "L", "L"]),
+    ("AC", "Athletic Club", 0, 0, 0, 0, 0, 0, 0, ["L", "D", "D", "W", "L"]),
+    ("NA", "Napoli", 0, 0, 0, 0, 0, 0, 0, ["D", "W", "L", "D", "L"]),
+    ("CO", "Copenhagen", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "W", "D", "W"]),
+    ("AJ", "Ajax", 0, 0, 0, 0, 0, 0, 0, ["L", "L", "W", "W", "L"]),
+    ("FR", "Frankfurt", 0, 0, 0, 0, 0, 0, 0, ["D", "L", "L", "L", "L"]),
+    ("SL", "Slavia Praha", 0, 0, 0, 0, 0, 0, 0, ["L", "D", "L", "L", "L"]),
+    ("VL", "Villareal", 0, 0, 0, 0, 0, 0, 0, ["L", "L", "L", "L", "L"]),
+    ("KA", "Kairat Almaty", 0, 0, 0, 0, 0, 0, 0, ["L", "L", "L", "L", "L"]),
+]
+
+_UEL_MOCK_DATA = [
+    ("LY", "Lyon", 0, 0, 0, 0, 0, 0, 0, ["W", "W", "W", "W", "W"]),
+    ("AV", "Aston Villa", 0, 0, 0, 0, 0, 0, 0, ["W", "L", "W", "W", "W"]),
+    ("MD", "Midtjylland", 0, 0, 0, 0, 0, 0, 0, ["W", "L", "W", "W", "W"]),
+    ("RB", "Real Betis", 0, 0, 0, 0, 0, 0, 0, ["W", "L", "W", "W", "W"]),
+    ("PR", "Porto", 0, 0, 0, 0, 0, 0, 0, ["D", "L", "W", "W", "W"]),
+    ("BR", "Braga", 0, 0, 0, 0, 0, 0, 0, ["D", "L", "W", "W", "W"]),
+    ("FR", "Freiburg", 0, 0, 0, 0, 0, 0, 0, ["D", "L", "W", "W", "W"]),
+    ("RO", "Roma", 0, 0, 0, 0, 0, 0, 0, ["W", "L", "W", "L", "W"]),
+    ("GN", "Genk", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "L", "W", "L"]),
+    ("BL", "Bologna", 0, 0, 0, 0, 0, 0, 0, ["W", "L", "L", "L", "W"]),
+    ("ST", "Stuttgart", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "D", "L", "D"]),
+    ("FR", "Ferencváros", 0, 0, 0, 0, 0, 0, 0, ["W", "L", "D", "W", "D"]),
+    ("NT", "Nott'm Forest", 0, 0, 0, 0, 0, 0, 0, ["D", "W", "W", "W", "D"]),
+    ("VP", "Viktoria Plzeň", 0, 0, 0, 0, 0, 0, 0, ["W", "W", "W", "D", "L"]),
+    ("CZ", "Crvena Zvezda", 0, 0, 0, 0, 0, 0, 0, ["W", "W", "W", "L", "L"]),
+    ("CE", "Celta", 0, 0, 0, 0, 0, 0, 0, ["W", "W", "D", "L", "W"]),
+    ("PA", "PAOK", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "D", "L", "L"]),
+    ("LI", "Lille", 0, 0, 0, 0, 0, 0, 0, ["D", "L", "W", "W", "W"]),
+    ("FE", "Fenerbahçe", 0, 0, 0, 0, 0, 0, 0, ["D", "L", "L", "W", "W"]),
+    ("PA", "Panathinaiko", 0, 0, 0, 0, 0, 0, 0, ["W", "L", "L", "D", "L"]),
+    ("CE", "Celtic", 0, 0, 0, 0, 0, 0, 0, ["W", "D", "W", "L", "D"]),
+    ("LU", "Ludogorets", 0, 0, 0, 0, 0, 0, 0, ["D", "L", "L", "W", "L"]),
+    ("GN", "GNK DInamo", 0, 0, 0, 0, 0, 0, 0, ["L", "L", "D", "W", "W"]),
+    ("BR", "Brann", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "W", "L", "W"]),
+    ("YB", "Young Boys", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "W", "L", "L"]),
+    ("SG", "Storm Graz", 0, 0, 0, 0, 0, 0, 0, ["W", "D", "L", "L", "W"]),
+    ("FC", "FCSB", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "L", "L", "W"]),
+    ("GO", "Go Ahead Eagles", 0, 0, 0, 0, 0, 0, 0, ["D", "W", "L", "L", "L"]),
+    ("AC", "Feyenooord", 0, 0, 0, 0, 0, 0, 0, ["L", "D", "D", "W", "L"]),
+    ("BA", "Basel", 0, 0, 0, 0, 0, 0, 0, ["D", "W", "L", "D", "L"]),
+    ("SA", "Salzburg", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "W", "D", "W"]),
+    ("RA", "Rangers", 0, 0, 0, 0, 0, 0, 0, ["L", "L", "W", "W", "L"]),
+    ("NI", "Nice", 0, 0, 0, 0, 0, 0, 0, ["D", "L", "L", "L", "L"]),
+    ("SL", "Utrecht", 0, 0, 0, 0, 0, 0, 0, ["L", "D", "L", "L", "L"]),
+    ("MA", "Malmo", 0, 0, 0, 0, 0, 0, 0, ["L", "L", "L", "L", "L"]),
+    ("TA", "M.Tel-Aviv", 0, 0, 0, 0, 0, 0, 0, ["L", "L", "L", "L", "L"]),
+]
+
+_UECL_MOCK_DATA = [
+    ("ST", "Strasbourg", 6, 5, 0, 1, 12, 5, 15, ["W", "W", "W", "W", "W"]),
+    ("RA", "Raków", 6, 4, 1, 1, 10, 5, 13, ["W", "L", "W", "W", "W"]),
+    ("SP", "Sparta Praha", 6, 4, 1, 1, 10, 6, 13, ["W", "L", "W", "W", "W"]),
+    ("AT", "AEK Athens", 6, 4, 1, 1, 9, 5, 13, ["W", "L", "W", "W", "W"]),
+    ("RV", "Rayo Vallecano", 6, 3, 2, 1, 8, 5, 11, ["D", "L", "W", "W", "W"]),
+    ("SH", "Shakhtar", 6, 3, 2, 1, 8, 6, 11, ["D", "L", "W", "W", "W"]),
+    ("MA", "Mainz", 6, 3, 2, 1, 8, 6, 11, ["D", "L", "W", "W", "W"]),
+    ("LA", "AEK Larnaca", 6, 3, 1, 2, 7, 6, 10, ["W", "L", "W", "L", "W"]),
+    ("LS", "Lausanne Sport", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "L", "W", "L"]),
+    ("CR", "Crystal Palace", 0, 0, 0, 0, 0, 0, 0, ["W", "L", "L", "L", "W"]),
+    ("LP", "Lech Poznań", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "D", "L", "D"]),
+    ("SA", "Samsunspor", 0, 0, 0, 0, 0, 0, 0, ["W", "L", "D", "W", "D"]),
+    ("CE", "Celije", 0, 0, 0, 0, 0, 0, 0, ["D", "W", "W", "W", "D"]),
+    ("AZ", "AZ Alkmaar", 0, 0, 0, 0, 0, 0, 0, ["W", "W", "W", "D", "L"]),
+    ("FL", "Florentina", 0, 0, 0, 0, 0, 0, 0, ["W", "W", "W", "L", "L"]),
+    ("RI", "Rijeka", 0, 0, 0, 0, 0, 0, 0, ["W", "W", "D", "L", "W"]),
+    ("JO", "Jogiellonia", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "D", "L", "L"]),
+    ("OM", "Omonoia", 0, 0, 0, 0, 0, 0, 0, ["D", "L", "W", "W", "W"]),
+    ("NO", "Noah", 0, 0, 0, 0, 0, 0, 0, ["D", "L", "L", "W", "W"]),
+    ("DR", "Drita", 0, 0, 0, 0, 0, 0, 0, ["W", "L", "L", "D", "L"]),
+    ("KU", "KuPS Kuopio", 0, 0, 0, 0, 0, 0, 0, ["W", "D", "W", "L", "D"]),
+    ("SH", "Shkëndija", 0, 0, 0, 0, 0, 0, 0, ["D", "L", "L", "W", "L"]),
+    ("ZR", "Zrinjski", 0, 0, 0, 0, 0, 0, 0, ["L", "L", "D", "W", "W"]),
+    ("SO", "Sigma Olomouc", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "W", "L", "W"]),
+    ("UC", "U. Craiova", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "W", "L", "L"]),
+    ("RI", "L. Red Imps", 0, 0, 0, 0, 0, 0, 0, ["W", "D", "L", "L", "W"]),
+    ("DK", "Dynamo Kyiv", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "L", "L", "W"]),
+    ("LW", "Legia Warszawa", 0, 0, 0, 0, 0, 0, 0, ["D", "W", "L", "L", "L"]),
+    ("SB", "S. Bratislava", 0, 0, 0, 0, 0, 0, 0, ["L", "D", "D", "W", "L"]),
+    ("BR", "Breiðablik", 0, 0, 0, 0, 0, 0, 0, ["D", "W", "L", "D", "L"]),
+    ("SR", "Shamrock Rovers", 0, 0, 0, 0, 0, 0, 0, ["L", "W", "W", "D", "W"]),
+    ("HC", "Häcken", 0, 0, 0, 0, 0, 0, 0, ["L", "L", "W", "W", "L"]),
+    ("HA", "Hamrun Spartans", 0, 0, 0, 0, 0, 0, 0, ["D", "L", "L", "L", "L"]),
+    ("SB", "Shelbourne", 0, 0, 0, 0, 0, 0, 0, ["L", "D", "L", "L", "L"]),
+    ("AB", "Aberdeen", 0, 0, 0, 0, 0, 0, 0, ["L", "L", "L", "L", "L"]),
+    ("SK", "SK Rapid", 0, 0, 0, 0, 0, 0, 0, ["L", "L", "L", "L", "L"]),
+]
