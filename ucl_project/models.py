@@ -8,9 +8,10 @@ FormResult = Literal["W", "D", "L"]
 
 
 class Team:
-    __slots__ = ("abbr", "name", "pld", "w", "d", "l", "gf", "ga", "form", "_pts_override")
+    __slots__ = ("team_id", "abbr", "name", "pld", "w", "d", "l", "gf", "ga", "form", "_pts_override")
 
-    def __init__(self, abbr: str, name: str) -> None:
+    def __init__(self, abbr: str, name: str, team_id: int | None = None) -> None:
+        self.team_id: int | None = team_id
         self.abbr: str = abbr
         self.name: str = name
         self.pld: int = 0

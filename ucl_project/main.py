@@ -1,5 +1,5 @@
-from ui import UCLTableApp
+from ui import LeagueTableApp
 
 if __name__ == "__main__":
-    app = UCLTableApp()
+    app = LeagueTableApp()
     app.mainloop()
