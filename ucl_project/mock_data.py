@@ -1,12 +1,21 @@
 from __future__ import annotations
 
+from espn_ids import resolve_espn_id
 from models import Team
+from sofascore_ids import resolve_sofascore_id
+from transfermarkt_ids import resolve_transfermarkt_id
 
 
 def _build_teams(rows: list[tuple[str, str, int, int, int, int, int, int, int, list[str]]]) -> list[Team]:
     teams: list[Team] = []
     for abbr, name, pld, w, d, l, gf, ga, pts, form in rows:
-        team = Team(abbr, name)
+        team = Team(
+            abbr,
+            name,
+            team_id=resolve_sofascore_id(name),
+            espn_id=resolve_espn_id(name),
+            transfermarkt_id=resolve_transfermarkt_id(name),
+        )
         team.pld = pld
         team.w = w
         team.d = d
