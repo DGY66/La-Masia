@@ -11,8 +11,10 @@ from urllib.request import Request, urlopen
 
 from cache import get_cached, set_cached
 from config import CompetitionConfig, RAPIDAPI_BASE_URL, RAPIDAPI_HOST, REQUEST_TIMEOUT
+from espn_ids import resolve_espn_id
 from models import FormResult, Team
-from mock_data import get_mock_teams
+from sofascore_ids import resolve_sofascore_id
+from transfermarkt_ids import resolve_transfermarkt_id
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,10 @@ PUBLIC_HEADERS = {
 
 
 class ApiError(Exception):
+    pass
+
+
+class NoSeasonDataError(ApiError):
     pass
 
 
@@ -77,8 +83,12 @@ class SofaScoreApiClient:
         ])
         self._last_update: str | None = None
 
-    def get_standings(self, competition: CompetitionConfig) -> tuple[list[Team], str | None, bool]:
-        season_candidates = self._resolve_season_candidates(competition)
+    def get_standings(
+        self,
+        competition: CompetitionConfig,
+        season_key: str = "2526",
+    ) -> tuple[list[Team], str | None, bool]:
+        season_candidates = self._resolve_season_candidates(competition, season_key)
         last_error: ApiError | None = None
 
         for index, season_id in enumerate(season_candidates):
@@ -115,17 +125,60 @@ class SofaScoreApiClient:
             raise ApiError(f"No season candidates available for {competition.short_title}")
         raise last_error
 
-    def _resolve_season_candidates(self, competition: CompetitionConfig) -> list[int]:
+    def _resolve_season_candidates(
+        self,
+        competition: CompetitionConfig,
+        season_key: str = "2526",
+    ) -> list[int]:
+        """Return a list of season IDs matching the requested season_key."""
+        if competition.key == "uecl" and _safe_int(season_key, 0) < 2122:
+            raise NoSeasonDataError(f"{competition.short_title} has no data before 2021/22")
+
         candidates: list[int] = []
 
-        if competition.preferred_season_id is not None:
-            candidates.append(competition.preferred_season_id)
-        if competition.fallback_season_id is not None:
-            candidates.append(competition.fallback_season_id)
+        # Convert "1516" to variants like "15/16", "2015/16", "2015/2016"
+        s1 = season_key[:2]
+        s2 = season_key[2:]
+        target_name_1 = f"{s1}/{s2}"
+        target_name_2 = f"20{s1}/{s2}"
+        target_name_3 = f"20{s1}/20{s2}"
+        target_name_4 = f"{s1}/20{s2}"
+
+        try:
+            data = self._request(f"/unique-tournament/{competition.tournament_id}/seasons")
+            raw_seasons = data.get("seasons")
+            if isinstance(raw_seasons, list):
+                for season in raw_seasons:
+                    if not isinstance(season, dict): continue
+                    name = str(season.get("name", ""))
+                    season_id = season.get("id")
+                    if not isinstance(season_id, int): continue
+
+                    if (target_name_1 in name or target_name_2 in name or 
+                        target_name_3 in name or target_name_4 in name):
+                        candidates.append(season_id)
+        except ApiError:
+            pass
+            
+        if candidates:
+            return list(dict.fromkeys(candidates))
+
+        # Fallback to predefined if current or archive
+        if season_key == "2526":
+            if competition.preferred_season_id is not None:
+                candidates.append(competition.preferred_season_id)
+            if competition.fallback_season_id is not None:
+                candidates.append(competition.fallback_season_id)
+        elif season_key == "2425":
+            if competition.archive_preferred_season_id is not None:
+                candidates.append(competition.archive_preferred_season_id)
+            if competition.archive_fallback_season_id is not None:
+                candidates.append(competition.archive_fallback_season_id)
 
         if candidates:
             return list(dict.fromkeys(candidates))
 
+        # Ultimate fallback
         seasons = self._fetch_seasons(competition.tournament_id)
         if not seasons:
             raise ApiError(f"Could not resolve season IDs for {competition.short_title}")
@@ -270,10 +323,44 @@ class SofaScoreApiClient:
                 if not isinstance(t_info, dict):
                     continue
 
+                country_info = t_info.get("country")
+                country_name = None
+                country_alpha2 = None
+                if isinstance(country_info, dict):
+                    raw_country_name = country_info.get("name")
+                    raw_alpha2 = (
+                        country_info.get("alpha2")
+                        or country_info.get("alpha2Code")
+                        or country_info.get("nameCode")
+                    )
+                    if isinstance(raw_country_name, str) and raw_country_name.strip():
+                        country_name = raw_country_name.strip()
+                    if isinstance(raw_alpha2, str) and raw_alpha2.strip():
+                        country_alpha2 = raw_alpha2.strip()
+
+                raw_name = str(t_info.get("name", "Unknown"))
+                raw_short_name = t_info.get("shortName")
+                raw_name_code = t_info.get("nameCode")
+                raw_slug = t_info.get("slug")
+                raw_team_id = _safe_int(t_info.get("id"), 0) or resolve_sofascore_id(
+                    raw_name,
+                    str(raw_short_name) if raw_short_name is not None else None,
+                    str(raw_name_code) if raw_name_code is not None else None,
+                    str(raw_slug) if raw_slug is not None else None,
+                )
                 team = Team(
-                    abbr=str(t_info.get("nameCode") or t_info.get("shortName") or "??")[:3].upper(),
-                    name=str(t_info.get("name", "Unknown")),
-                    team_id=_safe_int(t_info.get("id"), 0) or None,
+                    abbr=str(raw_name_code or raw_short_name or "??")[:3].upper(),
+                    name=raw_name,
+                    team_id=raw_team_id,
+                    country_name=country_name,
+                    country_alpha2=country_alpha2,
+                    espn_id=resolve_espn_id(
+                        raw_name,
+                        str(raw_short_name) if raw_short_name is not None else None,
+                        str(raw_name_code) if raw_name_code is not None else None,
+                        str(raw_slug) if raw_slug is not None else None,
+                    ),
+                    transfermarkt_id=resolve_transfermarkt_id(raw_name),
                 )
                 team.pld = _safe_int(row.get("matches"))
                 team.w = _safe_int(row.get("wins"))
@@ -289,21 +376,8 @@ class SofaScoreApiClient:
                 team.form = _parse_form(row.get("form"))
                 teams.append(team)
 
-        self._apply_display_overrides(teams, competition_key)
         logger.info("Parsed %d teams from standings", len(teams))
         return teams
-
-    @staticmethod
-    def _apply_display_overrides(teams: list[Team], competition_key: str) -> None:
-        reference = get_mock_teams(competition_key)
-        for index, team in enumerate(teams):
-            if index >= len(reference):
-                break
-            ref = reference[index]
-            team.abbr = ref.abbr
-            team.name = ref.name
-            if not team.form:
-                team.form = list(ref.form)
 
     @staticmethod
     def _extract_timestamp(data: dict[str, Any]) -> str:
