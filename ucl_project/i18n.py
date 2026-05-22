@@ -19,83 +19,63 @@ SEASONS: Final[list[dict[str, str]]] = [
     {"key": "1516", "label": "2015 / 16", "tag_key": "archive"},
 ]
 
-HOME_TRANSLATIONS: Final[dict[str, dict[str, str]]] = {
+HOME_TRANSLATIONS: Final[dict[str, dict[str, object]]] = {
     "English": {
-        "title": "UEFA League Tables",
-        "subtitle": "Select a season and a competition to view the standings",
         "app_title": "UEFA Competition Card",
         "choose_competition": "CHOOSE COMPETITION",
         "choose_subtitle": "Select your UEFA competition to get started",
-        "select_season": "Select Season",
         "select": "Select",
-        "season": "SEASON",
-        "competition": "COMPETITION",
-        "view_standings": "  View Standings  →",
-        "current_season": "Current Season",
-        "archive": "Archive",
         "competitions": {
             "ucl": "UEFA Champions League",
             "uel": "UEFA Europa League",
             "uecl": "UEFA Conference League",
         },
+        "title": "UEFA League Tables",
+        "subtitle": "Select a season and a competition to view the standings",
+        "season": "SEASON",
+        "competition": "COMPETITION",
+        "view_standings": "  View Standings  →",
+        "current_season": "Current Season",
+        "archive": "Archive",
     },
     "Русский": {
         "title": "Таблицы лиг УЕФА",
         "subtitle": "Выберите сезон и турнир для просмотра таблиц",
-        "app_title": "Карточка турниров УЕФА",
-        "choose_competition": "ВЫБЕРИТЕ ТУРНИР",
-        "choose_subtitle": "Выберите турнир УЕФА, чтобы начать",
-        "select_season": "Выберите сезон",
-        "select": "Выбрать",
         "season": "СЕЗОН",
         "competition": "ТУРНИР",
         "view_standings": "  Смотреть таблицы  →",
         "current_season": "Текущий сезон",
         "archive": "Архив",
-        "competitions": {
-            "ucl": "Лига чемпионов УЕФА",
-            "uel": "Лига Европы УЕФА",
-            "uecl": "Лига конференций УЕФА",
-        },
     },
     "Кыргызча": {
         "title": "УЕФА лигаларынын таблицалары",
         "subtitle": "Таблицаларды көрүү үчүн сезонду жана турнирди тандаңыз",
-        "app_title": "УЕФА турниринин картасы",
-        "choose_competition": "ТУРНИРДИ ТАНДАҢЫЗ",
-        "choose_subtitle": "Баштоо үчүн УЕФА турнирин тандаңыз",
-        "select_season": "Сезон тандаңыз",
-        "select": "Тандоо",
         "season": "СЕЗОН",
         "competition": "ТУРНИР",
         "view_standings": "  Таблицаларды көрүү  →",
         "current_season": "Учурдагы сезон",
         "archive": "Архив",
-        "competitions": {
-            "ucl": "УЕФА Чемпиондор Лигасы",
-            "uel": "УЕФА Европа Лигасы",
-            "uecl": "Конференция Лигасы",
-        },
     },
 }
 
 TABLE_TRANSLATIONS: Final[dict[str, dict[str, object]]] = {
     "English": {
         "go_home": "Home",
-        "final_stages": "Final stages",
+        "knockout_stages": "Knockout stages",
         "back": "Back",
         "matches": "Matches",
         "by_date": "By date",
         "by_round": "By round",
         "final": "Final",
+        "quarterfinals": "Quarterfinals",
+        "semifinals": "Semifinals",
+        "season": "Season",
+        "no_knockout_data": "Knockout data is not available for this season.",
+        "uecl_not_started": "UEFA Conference League started in the 2021/22 season. There is no data before that season.",
+        "not_started": "Not played yet",
         "last_updated": "Last updated",
         "matchday": "Matchday {current} of {total}",
         "nav_to": "{name}",
-        "mock_data": "League Phase {season} (Mock Data - API Unavailable)",
-        "no_season_data_title": "No data for this season",
-        "no_season_data_message": "UEFA Conference League started in 2021/22. Please return home.",
-        "footer_design": "Design made by: Arsen, Eldiar\nPRG-28B",
-        "footer_team": "La Masia Team",
         "columns": ["#", "CLUB", "PLD", "W", "D", "L", "For", "GA", "GD", "PTS", "FORM"],
         "sections": {
             "r16": "Straight to Round of 16",
@@ -121,20 +101,21 @@ TABLE_TRANSLATIONS: Final[dict[str, dict[str, object]]] = {
     },
     "Русский": {
         "go_home": "Назад",
-        "final_stages": "Финальные стадии",
+        "knockout_stages": "Плей-офф",
         "back": "Назад",
         "matches": "Матчи",
         "by_date": "По дате",
         "by_round": "По раунду",
         "final": "Финал",
+        "quarterfinals": "Четвертьфиналы",
+        "semifinals": "Полуфиналы",
+        "season": "Сезон",
+        "no_knockout_data": "Данные плей-офф для этого сезона недоступны.",
+        "uecl_not_started": "Лига конференций УЕФА началась с сезона 2021/22. До этого сезона данных нет.",
+        "not_started": "Еще не сыграно",
         "last_updated": "Обновлено",
         "matchday": "Тур {current} из {total}",
         "nav_to": "{name}",
-        "mock_data": "Лиговый этап {season} (тестовые данные — API недоступен)",
-        "no_season_data_title": "Нет данных за этот сезон",
-        "no_season_data_message": "Лига конференций УЕФА началась в сезоне 2021/22. Вернитесь домой.",
-        "footer_design": "Дизайн подготовили: Арсен, Элдиар\nPRG-28B",
-        "footer_team": "Команда La Masia",
         "columns": ["#", "КЛУБ", "И", "В", "Н", "П", "ЗА", "ПР", "РМ", "ОЧКИ", "ФОРМА"],
         "sections": {
             "r16": "Прямой выход в 1/8 финала",
@@ -160,20 +141,21 @@ TABLE_TRANSLATIONS: Final[dict[str, dict[str, object]]] = {
     },
     "Кыргызча": {
         "go_home": "Артка",
-        "final_stages": "Финалдык баскычтар",
+        "knockout_stages": "Плей-офф",
         "back": "Артка",
         "matches": "Оюндар",
         "by_date": "Дата боюнча",
         "by_round": "Раунд боюнча",
         "final": "Финал",
+        "quarterfinals": "Чейрек финал",
+        "semifinals": "Жарым финал",
+        "season": "Сезон",
+        "no_knockout_data": "Бул сезон үчүн плей-офф маалыматтары жок.",
+        "uecl_not_started": "УЕФА Конференция Лигасы 2021/22 сезонунан башталган. Ага чейинки сезондор үчүн маалымат жок.",
+        "not_started": "Азырынча ойноло элек",
         "last_updated": "Жаңыртылган",
         "matchday": "{current}-тур / {total}",
         "nav_to": "{name}",
-        "mock_data": "Лига этабы {season} (тесттик маалыматтар — API жеткиликсиз)",
-        "no_season_data_title": "Бул сезон боюнча маалымат жок",
-        "no_season_data_message": "УЕФА Конференция Лигасы 2021/22 сезонунда башталган. Үйгө кайтыңыз.",
-        "footer_design": "Дизайн жасагандар: Арсен, Элдиар\nPRG-28B",
-        "footer_team": "La Masia командасы",
         "columns": ["#", "КЛУБ", "ОЮН", "Ж", "Т", "У", "КИР", "ЧЫГ", "РМ", "УПАЙ", "ФОРМА"],
         "sections": {
             "r16": "Түз эле 1/8 финалга",
@@ -200,12 +182,48 @@ TABLE_TRANSLATIONS: Final[dict[str, dict[str, object]]] = {
 }
 
 
-def get_home_strings(language: str) -> dict[str, str]:
-    return HOME_TRANSLATIONS.get(language, HOME_TRANSLATIONS["English"])
+def get_home_strings(language: str) -> dict[str, object]:
+    strings = HOME_TRANSLATIONS["English"] | HOME_TRANSLATIONS.get(language, {})
+    if language == LANGUAGES[1]:
+        strings |= {
+            "app_title": "Карточка турниров УЕФА",
+            "choose_competition": "ВЫБЕРИТЕ ТУРНИР",
+            "choose_subtitle": "Выберите турнир УЕФА, чтобы начать",
+            "select_season": "Выберите сезон",
+            "select": "Выбрать",
+            "competitions": {
+                "ucl": "Лига чемпионов УЕФА",
+                "uel": "Лига Европы УЕФА",
+                "uecl": "Лига конференций УЕФА",
+            },
+        }
+    elif language == LANGUAGES[2]:
+        strings |= {
+            "app_title": "УЕФА турниринин картасы",
+            "choose_competition": "ТУРНИРДИ ТАНДАҢЫЗ",
+            "choose_subtitle": "Баштоо үчүн УЕФА турнирин тандаңыз",
+            "select_season": "Сезон тандаңыз",
+            "select": "Тандоо",
+            "competitions": {
+                "ucl": "УЕФА Чемпиондор Лигасы",
+                "uel": "УЕФА Европа Лигасы",
+                "uecl": "Конференция Лигасы",
+            },
+        }
+    else:
+        strings.setdefault("select_season", "Select Season")
+    return strings
 
 
 def get_table_strings(language: str) -> dict[str, object]:
-    return TABLE_TRANSLATIONS.get(language, TABLE_TRANSLATIONS["English"])
+    strings = TABLE_TRANSLATIONS["English"] | TABLE_TRANSLATIONS.get(language, {})
+    if language == LANGUAGES[1]:
+        strings["export_as"] = "Экспорт..."
+    elif language == LANGUAGES[2]:
+        strings["export_as"] = "Экспорт..."
+    else:
+        strings["export_as"] = "Export as..."
+    return strings
 
 
 def get_competition_title(language: str, competition_key: str, fallback: str) -> str:

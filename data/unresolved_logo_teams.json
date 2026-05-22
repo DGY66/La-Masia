@@ -1,0 +1,17 @@
+[
+  {
+    "sofascore_team_id": 44,
+    "name": "Liverpool FC",
+    "country": "England",
+    "sources": [
+      "ucl_project\\.cache\\unique-tournament_679_season_53654_standings_total.json",
+      "ucl_project\\.cache\\unique-tournament_7_season_13415_standings_total.json",
+      "ucl_project\\.cache\\unique-tournament_7_season_17351_standings_total.json",
+      "ucl_project\\.cache\\unique-tournament_7_season_29267_standings_total.json",
+      "ucl_project\\.cache\\unique-tournament_7_season_41897_standings_total.json",
+      "ucl_project\\.cache\\unique-tournament_7_season_61644_standings_total.json",
+      "ucl_project\\.cache\\unique-tournament_7_season_76953_standings_total.json"
+    ],
+    "reason": "API/search error: HTTP 429: Too Many Requests"
+  }
+]

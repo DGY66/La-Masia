@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import base64
+import csv
 import hashlib
 import logging
 import math
 import tkinter as tk
 from datetime import datetime
 from pathlib import Path
+from tkinter import filedialog, messagebox
 from typing import Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -41,8 +43,9 @@ from config import (
 from i18n import SEASONS, get_competition_title, get_table_strings
 from models import Team
 from espn_logos import ESPNLogoManager
-from final_stages import FinalStagesWindow
 from transfermarkt_logos import TransfermarktLogoManager
+from final_stages import FinalStagesWindow
+from api_football_logos import clear_team_logo_cache, get_api_football_id, get_team_logo, has_team_logo
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
@@ -55,6 +58,39 @@ REMOTE_HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/136.0.0.0 Safari/537.36"
     )
+}
+
+COMPETITION_THEMES = {
+    "ucl": {
+        "page": "#AFC0F7",
+        "table": "#D8E2FF",
+        "section": "#D8E2FF",
+        "header": "#0C1874",
+        "border": "#050B3F",
+        "shadow": "#6D789A",
+        "export": "#2637A9",
+        "export_hover": "#3448D0",
+    },
+    "uel": {
+        "page": "#EA9A45",
+        "table": "#FFF7DE",
+        "section": "#FFF7DE",
+        "header": "#D45917",
+        "border": "#4A1D0B",
+        "shadow": "#9C5C24",
+        "export": "#8C4219",
+        "export_hover": "#A65320",
+    },
+    "uecl": {
+        "page": "#F0FFC0",
+        "table": "#D8FCE8",
+        "section": "#D8FCE8",
+        "header": "#00C91A",
+        "border": "#003D09",
+        "shadow": "#7EA95A",
+        "export": "#078B18",
+        "export_hover": "#0BA823",
+    },
 }
 
 
@@ -108,24 +144,24 @@ class LeagueTableApp(ctk.CTk):
         self.language = language
         self.season_key = season_key
         self.competition: CompetitionConfig = COMPETITIONS[competition_key]
-        self.title(get_competition_title(self.language, self.competition.key, self.competition.app_title))
+        self.title(self.competition.app_title)
         self.geometry("1440x900")
         self.minsize(1240, 820)
         self.configure(fg_color=APP_BG)
         self.protocol("WM_DELETE_WINDOW", self._close_window)
+        clear_team_logo_cache()
 
         self.teams: list[Team] = []
         self.last_update: str = self._display_timestamp(None)
         self.is_fallback_data = False
-        self.no_season_data = False
         self.nav_buttons: list[ctk.CTkButton] = []
-        self.final_stages_window: FinalStagesWindow | None = None
         self.logo_images: dict[str, tk.PhotoImage] = {}
         self.espn_logos = ESPNLogoManager()
-        self.espn_logo_placeholder = self.espn_logos.get_placeholder((24, 24))
+        self.espn_logo_placeholder = self.espn_logos.get_placeholder((40, 40))
         self.transfermarkt_logos = TransfermarktLogoManager()
-        self.team_logo_placeholder = self.transfermarkt_logos.get_placeholder((24, 24))
-        self.table_inner_width = sum(COL_WIDTHS) + 32
+        self.team_logo_placeholder = self.transfermarkt_logos.get_placeholder((40, 40))
+        self.table_inner_width = sum(COL_WIDTHS)
+        self.final_stages_window: FinalStagesWindow | None = None
 
         self._build_shell()
         self.espn_logos.start_ui_pump(self)
@@ -138,7 +174,12 @@ class LeagueTableApp(ctk.CTk):
     def strings(self) -> dict[str, object]:
         return get_table_strings(self.language)
 
+    @property
+    def theme(self) -> dict[str, str]:
+        return COMPETITION_THEMES.get(self.competition.key, COMPETITION_THEMES["ucl"])
+
     def set_teams(self, teams: list[Team], last_update: str | None = None, is_fallback: bool = False) -> None:
+        self._fill_missing_forms(teams)
         self.teams = teams
         self.is_fallback_data = is_fallback
         self.last_update = self._display_timestamp(last_update)
@@ -152,7 +193,6 @@ class LeagueTableApp(ctk.CTk):
         self.competition = COMPETITIONS[competition_key]
         self.teams = []
         self.is_fallback_data = False
-        self.no_season_data = False
         self.last_update = self._display_timestamp(None)
         self._apply_competition_ui()
         self._render_table()
@@ -164,15 +204,21 @@ class LeagueTableApp(ctk.CTk):
         self.season_key = season_key
         self.teams = []
         self.is_fallback_data = False
-        self.no_season_data = False
         self.last_update = self._display_timestamp(None)
         self._update_header()
         self._render_table()
         self.after(50, self.refresh_from_api)
 
     def refresh_from_api(self) -> None:
+        if self._is_unavailable_uecl_season():
+            self.teams = []
+            self.is_fallback_data = False
+            self._update_header()
+            self._render_table()
+            return
+
         try:
-            from api import NoSeasonDataError, SofaScoreApiClient
+            from api import SofaScoreApiClient
 
             logging.basicConfig(level=logging.INFO)
             logger.info("Fetching %s standings (season=%s)", self.competition.short_title, self.season_key)
@@ -183,19 +229,18 @@ class LeagueTableApp(ctk.CTk):
                 self.set_teams(teams, last_update, is_fallback)
             else:
                 self._load_mock_data()
-        except NoSeasonDataError as exc:
-            logger.info("%s", exc)
-            self.no_season_data = True
-            self.teams = []
-            self.is_fallback_data = False
-            self.last_update = self._display_timestamp(None)
-            self._update_header()
-            self._render_table()
         except Exception as exc:
             logger.error("Failed to fetch %s data: %s", self.competition.short_title, exc)
             self._load_mock_data()
 
     def _load_mock_data(self) -> None:
+        if self._is_unavailable_uecl_season():
+            self.teams = []
+            self.is_fallback_data = False
+            self._update_header()
+            self._render_table()
+            return
+
         try:
             from mock_data import get_mock_teams
 
@@ -205,18 +250,33 @@ class LeagueTableApp(ctk.CTk):
             self.last_update = "20 Feb 2026"
             self._update_header()
 
+    def _fill_missing_forms(self, teams: list[Team]) -> None:
+        try:
+            from mock_data import get_mock_teams
+        except Exception:
+            return
+
+        mock_teams = get_mock_teams(self.competition.key)
+        mock_forms = {team.name.lower(): team.form for team in mock_teams}
+        for index, team in enumerate(teams):
+            if not team.form:
+                team.form = mock_forms.get(team.name.lower(), mock_teams[index].form if index < len(mock_teams) else [])
+
+    def _is_unavailable_uecl_season(self) -> bool:
+        return self.competition.key == "uecl" and self.season_key in {"1516", "1617", "1718", "1819", "1920", "2021"}
+
     def _build_shell(self) -> None:
-        self.header = GradientFrame(self, self.competition.header_gradient, height=150)
+        self.header = GradientFrame(self, self.competition.header_gradient, height=160)
         self.header.pack(fill="x", side="top")
         self.header.pack_propagate(False)
 
         self.header_left = ctk.CTkFrame(self.header, fg_color="transparent")
-        self.header_left.place(x=48, y=44)
+        self.header_left.place(x=48, y=36)
 
         self.title_label = ctk.CTkLabel(
             self.header_left,
             text="",
-            font=ctk.CTkFont(family="Arial", size=32, weight="bold"),
+            font=ctk.CTkFont(family="Arial", size=24, weight="bold"),
             text_color="white",
         )
         self.title_label.pack(anchor="w")
@@ -233,7 +293,7 @@ class LeagueTableApp(ctk.CTk):
             self.header,
             text="",
             command=self._go_home,
-            width=92,
+            width=100,
             height=32,
             corner_radius=12,
             font=ctk.CTkFont(family="Arial", size=13, weight="bold"),
@@ -241,32 +301,24 @@ class LeagueTableApp(ctk.CTk):
             text_color="#101010",
             hover_color="#EDEDED",
         )
-        self.home_btn.place(x=48, y=10)
+        self.home_btn.place(relx=0.5, x=-78, rely=0.5, anchor="center")
 
-        self.nav_frame = ctk.CTkFrame(self.header, fg_color="transparent")
-        self.nav_frame.place(relx=0.5, y=12, anchor="n")
-
-        self.final_stages_btn = ctk.CTkButton(
+        self.knockout_btn = ctk.CTkButton(
             self.header,
             text="",
             command=self._open_final_stages,
-            width=136,
-            height=36,
+            width=150,
+            height=32,
             corner_radius=12,
             font=ctk.CTkFont(family="Arial", size=13, weight="bold"),
             fg_color="#FFFFFF",
             text_color="#101010",
             hover_color="#EDEDED",
-            border_width=1,
-            border_color="#D6D6D6",
         )
-        self.final_stages_btn.place(relx=0.5, y=66, anchor="n")
-
-        self.season_toggle_frame = ctk.CTkFrame(self.header, fg_color="transparent")
-        self.season_toggle_frame.place(relx=1.0, x=-36, y=8, anchor="ne")
+        self.knockout_btn.place(relx=0.5, x=96, rely=0.5, anchor="center")
 
         self.header_right = ctk.CTkFrame(self.header, fg_color="transparent")
-        self.header_right.place(relx=1.0, x=-36, y=82, anchor="ne")
+        self.header_right.place(relx=1.0, x=-72, y=28, anchor="ne")
 
         self.matchday_label = ctk.CTkLabel(
             self.header_right,
@@ -284,8 +336,25 @@ class LeagueTableApp(ctk.CTk):
         )
         self.timestamp_label.pack(anchor="e", pady=(2, 0))
 
+        self.export_btn = ctk.CTkButton(
+            self.header_right,
+            text="",
+            command=self._open_export_menu,
+            width=154,
+            height=42,
+            corner_radius=7,
+            font=ctk.CTkFont(family="Arial", size=15, weight="bold"),
+            fg_color="#2637A9",
+            text_color="#FFFFFF",
+            hover_color="#3448D0",
+        )
+        self.export_btn.pack(anchor="e", pady=(8, 0))
+
         self.outer = ctk.CTkFrame(self, fg_color=OUTER_BG, corner_radius=0)
         self.outer.pack(fill="both", expand=True)
+
+        self.header_shadow = ctk.CTkFrame(self.outer, fg_color="#6D789A", corner_radius=0, height=5)
+        self.header_shadow.pack(fill="x", side="top")
 
         self.scroll = ctk.CTkScrollableFrame(
             self.outer,
@@ -307,7 +376,12 @@ class LeagueTableApp(ctk.CTk):
             self.final_stages_window.lift()
             self.final_stages_window.focus_force()
             return
-        self.final_stages_window = FinalStagesWindow(self, self.competition.key, self.language)
+        self.final_stages_window = FinalStagesWindow(
+            self,
+            competition_key=self.competition.key,
+            season_key=self.season_key,
+            language=self.language,
+        )
 
     def _close_window(self) -> None:
         try:
@@ -322,36 +396,104 @@ class LeagueTableApp(ctk.CTk):
             pass
         self.destroy()
 
+    def _open_export_menu(self) -> None:
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(label="CSV", command=self._export_csv)
+        menu.add_command(label="TXT", command=self._export_txt)
+        x = self.export_btn.winfo_rootx()
+        y = self.export_btn.winfo_rooty() + self.export_btn.winfo_height()
+        menu.tk_popup(x, y)
+
+    def _export_rows(self) -> list[list[object]]:
+        rows: list[list[object]] = []
+        headers = self.strings["columns"]
+        rows.append([str(value) for value in headers])
+        for position, team in enumerate(sorted(self.teams, key=lambda item: item.sort_key()), start=1):
+            rows.append([
+                position,
+                team.name,
+                team.pld,
+                team.w,
+                team.d,
+                team.l,
+                team.gf,
+                team.ga,
+                team.gd,
+                team.pts,
+                " ".join(team.form),
+            ])
+        return rows
+
+    def _default_export_name(self, suffix: str) -> str:
+        return f"{self.competition.short_title}_{self.season_key}_standings.{suffix}"
+
+    def _export_csv(self) -> None:
+        path = filedialog.asksaveasfilename(
+            parent=self,
+            defaultextension=".csv",
+            initialfile=self._default_export_name("csv"),
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", newline="", encoding="utf-8-sig") as file:
+                writer = csv.writer(file)
+                writer.writerows(self._export_rows())
+        except OSError as exc:
+            messagebox.showerror("Export failed", str(exc), parent=self)
+            return
+        messagebox.showinfo("Export complete", f"Saved:\n{path}", parent=self)
+
+    def _export_txt(self) -> None:
+        path = filedialog.asksaveasfilename(
+            parent=self,
+            defaultextension=".txt",
+            initialfile=self._default_export_name("txt"),
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+        rows = self._export_rows()
+        widths = [max(len(str(row[index])) for row in rows) for index in range(len(rows[0]))]
+        lines = [
+            " | ".join(str(value).ljust(widths[index]) for index, value in enumerate(row))
+            for row in rows
+        ]
+        try:
+            Path(path).write_text("\n".join(lines), encoding="utf-8")
+        except OSError as exc:
+            messagebox.showerror("Export failed", str(exc), parent=self)
+            return
+        messagebox.showinfo("Export complete", f"Saved:\n{path}", parent=self)
+
     def _apply_competition_ui(self) -> None:
         self.header.set_colors(self.competition.header_gradient)
+        self.configure(fg_color=self.theme["page"])
+        self.outer.configure(fg_color=self.theme["page"])
+        self.header_shadow.configure(fg_color=self.theme["shadow"])
+        self.scroll.configure(fg_color=self.theme["page"])
+        self.export_btn.configure(fg_color=self.theme["export"], hover_color=self.theme["export_hover"])
         self._update_header()
-        self._rebuild_nav()
-        self._rebuild_season_toggle()
 
     def _update_header(self) -> None:
         strings = self.strings
         title = get_competition_title(self.language, self.competition.key, self.competition.title)
         self.title_label.configure(text=title)
         self.home_btn.configure(text=str(strings["go_home"]))
-        self.final_stages_btn.configure(text=str(strings["final_stages"]))
+        self.knockout_btn.configure(text=str(strings["knockout_stages"]))
+        self.export_btn.configure(text=f"{strings['export_as']}   >")
 
         phase_labels = strings.get("phase_labels", {})
         season_label = next((item["label"] for item in SEASONS if item["key"] == self.season_key), "2025 / 26")
         phase_template = phase_labels.get(self.season_key, "League Phase {season}") if isinstance(phase_labels, dict) else "League Phase {season}"
         if self.is_fallback_data:
-            mock_template = str(strings.get("mock_data", "League Phase {season} (Mock Data - API Unavailable)"))
-            subtitle = mock_template.format(season=season_label.replace(" ", ""))
+            subtitle = self.competition.mock_season_label
         else:
             subtitle = str(phase_template).format(season=season_label.replace(" ", ""))
         self.season_label.configure(text=subtitle)
 
-        matchday_template = str(strings["matchday"])
-        self.matchday_label.configure(
-            text=matchday_template.format(
-                current=self.competition.matchday_current,
-                total=self.competition.matchday_total,
-            )
-        )
+        self.matchday_label.configure(text=self.competition.matchday_text)
         self.timestamp_label.configure(text=f"{strings['last_updated']}: {self.last_update}")
         self.title(f"{title} · {season_label}")
 
@@ -365,7 +507,7 @@ class LeagueTableApp(ctk.CTk):
             cfg = COMPETITIONS[target]
             button = ctk.CTkButton(
                 self.nav_frame,
-                text=nav_template.format(name=get_competition_title(self.language, target, cfg.short_title)),
+                text=nav_template.format(name=cfg.short_title),
                 command=lambda key=target: self.switch_competition(key),
                 width=126,
                 height=42,
@@ -409,33 +551,36 @@ class LeagueTableApp(ctk.CTk):
         for widget in self.scroll.winfo_children():
             widget.destroy()
 
-        card_shadow = ctk.CTkFrame(self.scroll, fg_color=CARD_SHADOW, corner_radius=18, height=10)
-        card_shadow.grid(row=0, column=0, sticky="ew", padx=82, pady=(26, 0))
+        if self._is_unavailable_uecl_season():
+            self._render_unavailable_season()
+            self._render_footer(1)
+            return
+
+        theme = self.theme
+        card_shadow = ctk.CTkFrame(self.scroll, fg_color=theme["shadow"], corner_radius=8, height=10)
+        card_shadow.grid(row=0, column=0, sticky="", padx=36, pady=(34, 0))
+        card_shadow.configure(width=self.table_inner_width)
 
         card = ctk.CTkFrame(
             self.scroll,
-            fg_color=CARD_BG,
-            corner_radius=18,
+            width=self.table_inner_width,
+            fg_color=theme["border"],
+            corner_radius=8,
             border_width=1,
-            border_color=CARD_BORDER,
+            border_color=theme["border"],
         )
-        card.grid(row=0, column=0, sticky="ew", padx=74, pady=(18, 0))
+        card.grid(row=0, column=0, sticky="", padx=28, pady=(26, 0))
         card.grid_columnconfigure(0, weight=1)
 
-        table = ctk.CTkFrame(card, fg_color="transparent")
-        table.grid(row=0, column=0, sticky="w", pady=(0, 0), padx=(0, 0))
+        table = ctk.CTkFrame(card, fg_color=theme["table"], corner_radius=0)
+        table.grid(row=0, column=0, sticky="w", pady=(0, 7), padx=(0, 7))
         table.grid_columnconfigure(0, weight=0)
-
-        if self.no_season_data:
-            self._render_no_season_data(card)
-            self._render_footer(2)
-            return
 
         sorted_teams = sorted(self.teams, key=lambda team: team.sort_key())
         self._render_header_row(table)
 
         row_idx = 1
-        for sec_start, sec_end, sec_key in SECTIONS:
+        for sec_start, sec_end, _section_label, sec_key in SECTIONS:
             row_idx = self._render_section_header(table, row_idx, sec_key)
             for pos_in_section, team in enumerate(sorted_teams[sec_start:sec_end]):
                 global_pos = sec_start + pos_in_section + 1
@@ -444,45 +589,24 @@ class LeagueTableApp(ctk.CTk):
         self._render_disclaimer(row_idx + 1)
         self._render_footer(row_idx + 2)
 
-    def _render_no_season_data(self, parent: ctk.CTkFrame) -> None:
-        strings = self.strings
-        empty = ctk.CTkFrame(parent, fg_color="transparent", height=280)
-        empty.grid(row=0, column=0, sticky="ew", padx=28, pady=34)
-        empty.grid_columnconfigure(0, weight=1)
+    def _render_unavailable_season(self) -> None:
+        wrap = ctk.CTkFrame(self.scroll, fg_color="transparent")
+        wrap.grid(row=0, column=0, sticky="ew", padx=64, pady=(120, 50))
+        wrap.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
-            empty,
-            text=str(strings["no_season_data_title"]),
-            font=ctk.CTkFont(family="Arial", size=28, weight="bold"),
+            wrap,
+            text=str(self.strings["uecl_not_started"]),
+            font=ctk.CTkFont(family="Arial", size=30, weight="bold"),
             text_color=TEXT_COLOR,
-        ).grid(row=0, column=0, pady=(48, 12))
-
-        ctk.CTkLabel(
-            empty,
-            text=str(strings["no_season_data_message"]),
-            font=ctk.CTkFont(family="Arial", size=16),
-            text_color=SUBTEXT_COLOR,
-            wraplength=680,
+            wraplength=860,
             justify="center",
-        ).grid(row=1, column=0, pady=(0, 28))
-
-        ctk.CTkButton(
-            empty,
-            text=str(strings["go_home"]),
-            command=self._go_home,
-            width=150,
-            height=42,
-            corner_radius=14,
-            font=ctk.CTkFont(family="Arial", size=14, weight="bold"),
-            fg_color=self.competition.header_gradient[0],
-            hover_color=self.competition.header_gradient[1],
-            text_color="white",
-        ).grid(row=2, column=0)
+        ).grid(row=0, column=0, pady=(0, 18))
 
     def _render_header_row(self, parent: ctk.CTkFrame) -> None:
         headers = self.strings["columns"]
-        hdr = ctk.CTkFrame(parent, fg_color="#0C1874", height=42, corner_radius=8)
-        hdr.grid(row=0, column=0, sticky="ew", padx=12, pady=(14, 6))
+        hdr = ctk.CTkFrame(parent, fg_color=self.theme["header"], height=46, corner_radius=0)
+        hdr.grid(row=0, column=0, sticky="ew", padx=0, pady=(0, 0))
         for column, width in enumerate(COL_WIDTHS):
             hdr.grid_columnconfigure(column, weight=0, minsize=width)
 
@@ -506,18 +630,19 @@ class LeagueTableApp(ctk.CTk):
     def _render_section_header(self, parent: ctk.CTkFrame, row_idx: int, section_key: str) -> int:
         sections = self.strings["sections"]
         label = sections.get(section_key, section_key) if isinstance(sections, dict) else section_key
-        section = ctk.CTkFrame(parent, fg_color=SECTION_BG, corner_radius=0, height=30)
-        section.grid(row=row_idx, column=0, sticky="ew", padx=12, pady=(0, 0))
-        section.grid_columnconfigure(0, weight=1)
-        ctk.CTkFrame(section, fg_color=SEPARATOR_COLOR, height=1).place(relx=0.0, rely=0.0, relwidth=1.0)
-        ctk.CTkLabel(
-            section,
-            text=str(label),
-            font=ctk.CTkFont(family="Arial", size=11),
-            text_color=TEXT_COLOR,
-            anchor="w",
-        ).pack(side="left", padx=(12, 0), pady=7)
-        ctk.CTkFrame(section, fg_color=SEPARATOR_COLOR, height=1).place(relx=0.0, rely=1.0, relwidth=1.0, anchor="sw")
+        section = tk.Canvas(parent, height=34, highlightthickness=0, bd=0, bg=self.theme["section"])
+        section.grid(row=row_idx, column=0, sticky="ew", padx=0, pady=(0, 0))
+
+        def draw_section(_event: object | None = None) -> None:
+            width = max(section.winfo_width(), self.table_inner_width)
+            section.delete("all")
+            section.create_line(0, 0, width, 0, fill=SEPARATOR_COLOR, width=2)
+            section.create_line(0, 33, width, 33, fill=SEPARATOR_COLOR, width=2)
+            section.create_line(0, 0, 0, 34, fill=ZONE_COLORS[section_key], width=3)
+            section.create_text(14, 17, text=str(label), fill=TEXT_COLOR, font=("Arial", 11), anchor="w")
+
+        section.bind("<Configure>", draw_section)
+        section.after_idle(draw_section)
         return row_idx + 1
 
     def _render_team_row(
@@ -529,8 +654,8 @@ class LeagueTableApp(ctk.CTk):
         zone_key: str,
         is_alt: bool,
     ) -> int:
-        row = ctk.CTkFrame(parent, fg_color=ROW_ALT_BG if is_alt else ROW_BG, height=44, corner_radius=0)
-        row.grid(row=row_idx, column=0, sticky="ew", padx=12, pady=0)
+        row = ctk.CTkFrame(parent, fg_color=self.theme["table"], height=62, corner_radius=0)
+        row.grid(row=row_idx, column=0, sticky="ew", padx=0, pady=0)
         row.grid_propagate(False)
         for column, width in enumerate(COL_WIDTHS):
             row.grid_columnconfigure(column, weight=0, minsize=width)
@@ -555,14 +680,14 @@ class LeagueTableApp(ctk.CTk):
                 width=COL_WIDTHS[column],
                 font=ctk.CTkFont(family="Arial", size=12, weight="bold" if column == 9 else "normal"),
                 text_color=TEXT_COLOR,
-            ).grid(row=0, column=column, padx=(4, 4), pady=7)
+            ).grid(row=0, column=column, padx=(4, 4), pady=17)
 
         self._render_form(row, team, 10)
         return row_idx + 1
 
     def _render_club_cell(self, parent: ctk.CTkFrame, team: Team, column: int) -> None:
-        club = ctk.CTkFrame(parent, fg_color="transparent", width=COL_WIDTHS[column], height=32)
-        club.grid(row=0, column=column, padx=(8, 0), pady=5, sticky="w")
+        club = ctk.CTkFrame(parent, fg_color="transparent", width=COL_WIDTHS[column], height=50)
+        club.grid(row=0, column=column, padx=(8, 0), pady=6, sticky="w")
         club.grid_propagate(False)
         club.grid_columnconfigure(3, weight=1)
 
@@ -572,19 +697,19 @@ class LeagueTableApp(ctk.CTk):
         ctk.CTkLabel(
             club,
             text=team.name,
-            font=ctk.CTkFont(family="Arial", size=12),
+            font=ctk.CTkFont(family="Arial", size=13, weight="bold"),
             text_color=TEXT_COLOR,
             anchor="w",
-        ).grid(row=0, column=3, padx=(12, 0), sticky="w")
+        ).grid(row=0, column=3, padx=(16, 0), sticky="w")
 
     def _render_flag(self, parent: ctk.CTkFrame, team: Team, column: int) -> None:
-        frame = ctk.CTkFrame(parent, fg_color="transparent", width=30, height=22)
-        frame.grid(row=0, column=column, padx=(0, 8))
+        frame = ctk.CTkFrame(parent, fg_color="transparent", width=46, height=34)
+        frame.grid(row=0, column=column, padx=(0, 10))
         frame.grid_propagate(False)
 
-        image = self._get_remote_image(team.country_flag_url, f"flag:{team.country_alpha2 or team.country_name}", 26, 18)
+        image = self._get_remote_image(team.country_flag_url, f"flag:{team.country_alpha2 or team.country_name}", 40, 28)
         if image is not None:
-            label = tk.Label(frame, image=image, bd=0, highlightthickness=0, bg=ROW_BG)
+            label = tk.Label(frame, image=image, bd=0, highlightthickness=0, bg=self.theme["table"])
             label.image = image
             label.place(relx=0.5, rely=0.5, anchor="center")
             return
@@ -593,18 +718,20 @@ class LeagueTableApp(ctk.CTk):
         ctk.CTkLabel(
             frame,
             text=fallback,
-            font=ctk.CTkFont(family="Segoe UI Emoji", size=15, weight="bold"),
+            font=ctk.CTkFont(family="Segoe UI Emoji", size=19, weight="bold"),
             text_color=TEXT_COLOR,
         ).place(relx=0.5, rely=0.5, anchor="center")
 
     def _render_badge(self, parent: ctk.CTkFrame, team: Team, column: int) -> None:
-        frame = ctk.CTkFrame(parent, fg_color="transparent", width=28, height=28)
+        frame = ctk.CTkFrame(parent, fg_color="transparent", width=46, height=46)
         frame.grid(row=0, column=column, padx=(0, 0))
         frame.grid_propagate(False)
 
-        image = self._get_remote_image(team.team_logo_url, f"logo:{team.team_id or team.name}", 24, 24)
-        if image is not None:
-            label = tk.Label(frame, image=image, bd=0, highlightthickness=0, bg=ROW_BG)
+        api_football_id = team.api_football_id or get_api_football_id(team.team_id)
+        if api_football_id is not None and has_team_logo(api_football_id):
+            team.api_football_id = api_football_id
+            image = get_team_logo(api_football_id, (40, 40))
+            label = ctk.CTkLabel(frame, text="", image=image)
             label.image = image
             label.place(relx=0.5, rely=0.5, anchor="center")
             return
@@ -615,7 +742,7 @@ class LeagueTableApp(ctk.CTk):
             label.place(relx=0.5, rely=0.5, anchor="center")
             self.espn_logos.load_logo_async(
                 team.espn_id,
-                (24, 24),
+                (40, 40),
                 lambda image, target=label: self._set_ctk_image(target, image),
             )
             return
@@ -626,19 +753,26 @@ class LeagueTableApp(ctk.CTk):
             label.place(relx=0.5, rely=0.5, anchor="center")
             self.transfermarkt_logos.load_logo_async(
                 team.transfermarkt_id,
-                (24, 24),
+                (40, 40),
                 lambda image, target=label: self._set_ctk_image(target, image),
             )
             return
 
-        canvas = tk.Canvas(frame, width=28, height=28, highlightthickness=0, bd=0, bg=ROW_BG)
+        image = self._get_remote_image(team.team_logo_url, f"logo:{team.team_id or team.name}", 40, 40)
+        if image is not None:
+            label = tk.Label(frame, image=image, bd=0, highlightthickness=0, bg=self.theme["table"])
+            label.image = image
+            label.place(relx=0.5, rely=0.5, anchor="center")
+            return
+
+        canvas = tk.Canvas(frame, width=40, height=40, highlightthickness=0, bd=0, bg=self.theme["table"])
         canvas.place(relx=0.5, rely=0.5, anchor="center")
-        self._draw_gradient_rect(canvas, 0, 0, 28, 28, self.competition.badge_gradient, radius=8)
-        canvas.create_text(14, 14, text=team.abbr[:2].upper(), fill="white", font=("Arial", 8, "bold"))
+        self._draw_gradient_rect(canvas, 0, 0, 40, 40, self.competition.badge_gradient, radius=10)
+        canvas.create_text(20, 20, text=team.abbr[:2].upper(), fill="white", font=("Arial", 10, "bold"))
 
     def _render_form(self, parent: ctk.CTkFrame, team: Team, column: int) -> None:
-        frame = ctk.CTkFrame(parent, fg_color="transparent", width=COL_WIDTHS[column], height=26)
-        frame.grid(row=0, column=column, padx=(6, 8), pady=5)
+        frame = ctk.CTkFrame(parent, fg_color="transparent", width=COL_WIDTHS[column], height=32)
+        frame.grid(row=0, column=column, padx=(6, 8), pady=14)
         frame.grid_propagate(False)
 
         results = team.form[:5]
@@ -647,20 +781,22 @@ class LeagueTableApp(ctk.CTk):
             return
 
         content = ctk.CTkFrame(frame, fg_color="transparent")
-        content.place(relx=1.0, rely=0.5, anchor="e", x=-8)
+        content.place(relx=0.5, rely=0.5, anchor="center")
         for index, result in enumerate(results):
             color = FORM_WIN if result == "W" else FORM_LOSS if result == "L" else FORM_DRAW
-            canvas = tk.Canvas(content, width=18, height=18, highlightthickness=0, bd=0, bg=ROW_BG)
-            canvas.grid(row=0, column=index, padx=1)
-            canvas.create_oval(1, 1, 17, 17, fill=color, outline=color)
-            canvas.create_text(9, 9, text=result, fill="#101010" if result != "L" else "white", font=("Arial", 7, "bold"))
+            canvas = tk.Canvas(content, width=24, height=28, highlightthickness=0, bd=0, bg=self.theme["table"])
+            canvas.grid(row=0, column=index, padx=2)
+            canvas.create_oval(2, 2, 22, 22, fill=color, outline=color)
+            canvas.create_text(12, 12, text=result, fill="#101010" if result != "L" else "white", font=("Arial", 8, "bold"))
+            if index == len(results) - 1:
+                canvas.create_line(3, 26, 21, 26, fill=color, width=2)
 
     def _render_disclaimer(self, row_idx: int) -> None:
         strings = self.strings
         wrap = ctk.CTkFrame(self.scroll, fg_color="transparent")
         wrap.grid(row=row_idx, column=0, sticky="ew", padx=74, pady=(14, 8))
 
-        dot = tk.Canvas(wrap, width=16, height=16, highlightthickness=0, bd=0, bg=APP_BG)
+        dot = tk.Canvas(wrap, width=16, height=16, highlightthickness=0, bd=0, bg=self.theme["page"])
         dot.grid(row=0, column=0, sticky="nw", padx=(0, 16), pady=(0, 0))
         dot.create_oval(4, 4, 12, 12, fill=self.competition.header_gradient[0], outline=self.competition.header_gradient[0])
 
@@ -704,7 +840,7 @@ class LeagueTableApp(ctk.CTk):
 
         ctk.CTkLabel(
             footer,
-            text=str(self.strings["footer_design"]),
+            text="Design made by: Arsen, Eldiar\nPRG-28B",
             font=ctk.CTkFont(family="Arial", size=18, weight="bold"),
             text_color="white",
             justify="center",
@@ -712,7 +848,7 @@ class LeagueTableApp(ctk.CTk):
 
         ctk.CTkLabel(
             footer,
-            text=str(self.strings["footer_team"]),
+            text="La Masia Team",
             font=ctk.CTkFont(family="Arial", size=18, weight="bold"),
             text_color="white",
         ).place(relx=0.54, rely=0.72, anchor="center")
