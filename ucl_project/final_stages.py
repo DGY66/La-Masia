@@ -569,7 +569,7 @@ class FinalStagesWindow(ctk.CTkToplevel):
             )
             round_menu.set(round_values[0])
             self._widgets.append(round_menu)
-            self.canvas.create_window(self._x(98), self._y(135), window=round_menu, anchor="nw")
+            self.canvas.create_window(self._x(98), self._y(128), window=round_menu, anchor="nw")
 
         export = self._make_button("Export", self._export_csv, fg=self._theme()["export"], text_color="#FFFFFF", width=max(58, int(56 * self._ui_scale)), height=max(20, int(22 * self._ui_scale)))
         self.canvas.create_window(self._x(884), self._y(30), window=export, anchor="nw")
@@ -612,13 +612,13 @@ class FinalStagesWindow(ctk.CTkToplevel):
         box_w = self._x(270)
         box_h = self._y(62)
         x_positions = [self._x(64), self._x(388), self._x(710)]
-        title_y = self._y(265)
+        title_y = self._y(290)
         base_positions = {
-            0: [self._y(300), self._y(375), self._y(450), self._y(525)],
-            1: [self._y(338), self._y(488)],
-            2: [self._y(414)],
+            0: [self._y(325), self._y(400), self._y(475), self._y(550)],
+            1: [self._y(363), self._y(513)],
+            2: [self._y(439)],
         }
-        content_h = self._y(680)
+        content_h = self._y(705)
         content_w = self._x(1010)
 
         centers_by_round: list[list[tuple[float, float]]] = []
@@ -735,7 +735,7 @@ class FinalStagesWindow(ctk.CTkToplevel):
 
     def _draw_feature_final(self, match: KnockoutMatch) -> None:
         x = self._x(132)
-        y = self._y(162)
+        y = self._y(188)
         self.canvas.create_line(x, y, x, y + self._y(82), fill="#E8E8E8", width=max(3, int(3 * self._ui_scale)))
         self.canvas.create_line(x + self._x(18), y + self._y(41), x + self._x(250), y + self._y(41), fill="#E8E8E8", width=max(2, int(2 * self._ui_scale)))
         self.canvas.create_text(
