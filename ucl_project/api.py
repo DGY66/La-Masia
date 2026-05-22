@@ -358,7 +358,7 @@ class SofaScoreApiClient:
         return teams
 
     @staticmethod
-    def _extract_timestamp(data: dict[str, Any]) -> str:
+    def _extract_timestamp(data: dict[str, Any]) -> str | None:
         for key in ("updatedAt", "updatedAtTimestamp", "generatedAt"):
             raw = data.get(key)
             if isinstance(raw, (int, float)):
@@ -373,4 +373,4 @@ class SofaScoreApiClient:
                     return datetime.fromisoformat(raw.replace("Z", "+00:00")).strftime("%d %b %Y, %H:%M")
                 except ValueError:
                     continue
-        return datetime.now().strftime("%d %b %Y, %H:%M")
+        return None

@@ -183,12 +183,18 @@ class _StarCanvas(tk.Canvas):
 
 
 class HomeScreen(ctk.CTk):
-    def __init__(self, on_launch: Callable[[str, str, str], None]) -> None:
+    def __init__(
+        self,
+        on_launch: Callable[[str, str, str], None],
+        initial_league: str | None = None,
+        initial_season: str | None = None,
+        initial_language: str | None = None,
+    ) -> None:
         super().__init__()
         self._on_launch = on_launch
-        self._selected_season = SEASONS[0]["key"]
-        self._selected_league = LEAGUES[0]["key"]
-        self._language = "English"
+        self._selected_season = self._valid_season(initial_season)
+        self._selected_league = self._valid_league(initial_league)
+        self._language = self._valid_language(initial_language)
         self._league_cards: dict[str, ctk.CTkFrame] = {}
         self._league_name_labels: dict[str, ctk.CTkLabel] = {}
         self._league_canvases: dict[str, _RoundedGradientCanvas] = {}
@@ -428,7 +434,8 @@ class HomeScreen(ctk.CTk):
         return season["label"].replace(" / ", "/")
 
     def _change_language(self, language: str) -> None:
-        self._language = language
+        self._language = self._valid_language(language)
+        self._save_user_settings()
         strings = get_home_strings(self._language)
         self.title(strings["app_title"])
         self._app_title.configure(text=strings["app_title"])
@@ -450,10 +457,12 @@ class HomeScreen(ctk.CTk):
             if self._season_display(season["key"]) == display_value:
                 self._selected_season = season["key"]
                 break
+        self._save_user_settings()
         self._refresh_info()
 
     def _pick_league(self, key: str) -> None:
-        self._selected_league = key
+        self._selected_league = self._valid_league(key)
+        self._save_user_settings()
         self._refresh_info()
 
     def _on_card_click(self, event: tk.Event, key: str) -> None:
@@ -488,7 +497,7 @@ class HomeScreen(ctk.CTk):
             self._launch_info.configure(text=self._launch_label())
 
     def _launch_league(self, key: str) -> None:
-        self._selected_league = key
+        self._selected_league = self._valid_league(key)
         self._launch()
 
     def _get_logo_image(self, filename: str, max_width: int, max_height: int) -> tk.PhotoImage | None:
@@ -520,8 +529,31 @@ class HomeScreen(ctk.CTk):
         return f"#{r:02x}{g:02x}{b:02x}"
 
     def _launch(self) -> None:
+        self._save_user_settings()
         self._close_window()
         self._on_launch(self._selected_league, self._selected_season, self._language)
+
+    def _save_user_settings(self) -> None:
+        try:
+            from database import save_user_settings
+
+            save_user_settings(self._selected_league, self._selected_season, self._language)
+        except Exception:
+            return
+
+    @staticmethod
+    def _valid_league(value: str | None) -> str:
+        keys = {league["key"] for league in LEAGUES}
+        return value if value in keys else LEAGUES[0]["key"]
+
+    @staticmethod
+    def _valid_season(value: str | None) -> str:
+        keys = {season["key"] for season in SEASONS}
+        return value if value in keys else SEASONS[0]["key"]
+
+    @staticmethod
+    def _valid_language(value: str | None) -> str:
+        return value if value in LANGUAGES else "English"
 
     def _close_window(self) -> None:
         try:

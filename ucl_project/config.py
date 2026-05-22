@@ -105,7 +105,7 @@ UCL_COMPETITION: Final[CompetitionConfig] = CompetitionConfig(
 
 UEL_COMPETITION: Final[CompetitionConfig] = CompetitionConfig(
     key="uel",
-    title="UEFA Europe League",
+    title="UEFA Europa League",
     short_title="UEL",
     season_label="League Phase 2025/26",
     archive_season_label="League Phase (Archive)",
@@ -116,7 +116,7 @@ UEL_COMPETITION: Final[CompetitionConfig] = CompetitionConfig(
     header_gradient=("#D45917", "#110E0C"),
     footer_gradient=("#D45917", "#110E0C"),
     badge_gradient=("#030C2F", "#E97C10"),
-    app_title="UEFA Europe League",
+    app_title="UEFA Europa League",
     logo_lines=("UEFA", "EUROPA", "LEAGUE"),
     logo_path=str(ASSETS_DIR / "img_1.png"),
     matchday_text="Matchday 8 of 8",

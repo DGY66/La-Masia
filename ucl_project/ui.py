@@ -152,7 +152,7 @@ class LeagueTableApp(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self._close_window)
 
         self.teams: list[Team] = []
-        self.last_update: str = self._display_timestamp(None)
+        self.last_update: str = self._resolve_last_update(None)
         self.is_fallback_data = False
         self.nav_buttons: list[ctk.CTkButton] = []
         self.logo_images: dict[str, tk.PhotoImage] = {}
@@ -182,7 +182,7 @@ class LeagueTableApp(ctk.CTk):
         self._fill_missing_forms(teams)
         self.teams = teams
         self.is_fallback_data = is_fallback
-        self.last_update = self._display_timestamp(last_update)
+        self.last_update = self._resolve_last_update(last_update)
         self._update_header()
         self._render_table()
 
@@ -193,7 +193,7 @@ class LeagueTableApp(ctk.CTk):
         self.competition = COMPETITIONS[competition_key]
         self.teams = []
         self.is_fallback_data = False
-        self.last_update = self._display_timestamp(None)
+        self.last_update = self._resolve_last_update(None)
         self._apply_competition_ui()
         self._render_table()
         self.after(50, self.refresh_from_api)
@@ -204,7 +204,7 @@ class LeagueTableApp(ctk.CTk):
         self.season_key = season_key
         self.teams = []
         self.is_fallback_data = False
-        self.last_update = self._display_timestamp(None)
+        self.last_update = self._resolve_last_update(None)
         self._update_header()
         self._render_table()
         self.after(50, self.refresh_from_api)
@@ -245,22 +245,43 @@ class LeagueTableApp(ctk.CTk):
             from mock_data import get_mock_teams
 
             teams = get_mock_teams(self.competition.key)
-            self.set_teams(teams, "20 Feb 2026", is_fallback=True)
+            self.set_teams(teams, None, is_fallback=True)
         except Exception:
-            self.last_update = "20 Feb 2026"
+            self.last_update = self._resolve_last_update(None)
             self._update_header()
 
     def _fill_missing_forms(self, teams: list[Team]) -> None:
         try:
             from mock_data import get_mock_teams
+            all_mock_teams = []
+            for key in ["ucl", "uel", "uecl"]:
+                try:
+                    all_mock_teams.extend(get_mock_teams(key))
+                except Exception:
+                    pass
         except Exception:
             return
 
-        mock_teams = get_mock_teams(self.competition.key)
-        mock_forms = {team.name.lower(): team.form for team in mock_teams}
+        if not all_mock_teams:
+            return
+
+        mock_forms = {}
+        for team in all_mock_teams:
+            if team.form:
+                mock_forms[team.name.lower()] = team.form
+
         for index, team in enumerate(teams):
             if not team.form:
-                team.form = mock_forms.get(team.name.lower(), mock_teams[index].form if index < len(mock_teams) else [])
+                form = mock_forms.get(team.name.lower())
+                if not form:
+                    for mock_name, mock_form in mock_forms.items():
+                        if mock_name in team.name.lower() or team.name.lower() in mock_name:
+                            form = mock_form
+                            break
+                if not form:
+                    form = all_mock_teams[index % len(all_mock_teams)].form
+                team.form = form
+
 
     def _is_unavailable_uecl_season(self) -> bool:
         return self.competition.key == "uecl" and self.season_key in {"1516", "1617", "1718", "1819", "1920", "2021"}
@@ -486,16 +507,30 @@ class LeagueTableApp(ctk.CTk):
 
         phase_labels = strings.get("phase_labels", {})
         season_label = next((item["label"] for item in SEASONS if item["key"] == self.season_key), "2025 / 26")
-        phase_template = phase_labels.get(self.season_key, "League Phase {season}") if isinstance(phase_labels, dict) else "League Phase {season}"
+        phase_template = (
+            phase_labels.get(self.season_key) or phase_labels.get("default") or "League Phase {season}"
+            if isinstance(phase_labels, dict)
+            else "League Phase {season}"
+        )
         if self.is_fallback_data:
-            subtitle = self.competition.mock_season_label
+            mock_template = strings.get("mock_phase_label") or "League Phase {season} (Mock data - API unavailable)"
+            subtitle = str(mock_template).format(season=season_label.replace(" ", ""))
         else:
             subtitle = str(phase_template).format(season=season_label.replace(" ", ""))
         self.season_label.configure(text=subtitle)
 
-        self.matchday_label.configure(text=self.competition.matchday_text)
+        # Dynamic matchday formatting with multilingual support
+        total_matchdays = 6 if (self.season_key in {"1516", "1617", "1718", "1819", "1920", "2021", "2122", "2223", "2324"} or self.competition.key == "uecl") else 8
+        current_matchday = max((team.pld for team in self.teams), default=total_matchdays)
+        if current_matchday == 0:
+            current_matchday = total_matchdays
+
+        matchday_template = strings.get("matchday", "Matchday {current} of {total}")
+        matchday_str = str(matchday_template).format(current=current_matchday, total=total_matchdays)
+        self.matchday_label.configure(text=matchday_str)
+
         self.timestamp_label.configure(text=f"{strings['last_updated']}: {self.last_update}")
-        self.title(f"{title} · {season_label}")
+        self.title(f"{title} - {season_label}")
 
     def _rebuild_nav(self) -> None:
         for widget in self.nav_frame.winfo_children():
@@ -1009,6 +1044,21 @@ class LeagueTableApp(ctk.CTk):
                     continue
             return value
         return datetime.now().strftime("%d %b %Y")
+
+    def _resolve_last_update(self, value: str | None) -> str:
+        if value:
+            return self._display_timestamp(value)
+        if self.season_key == "2526":
+            return self._display_timestamp(None)
+        # Determine finished season end date
+        try:
+            if len(self.season_key) == 4 and self.season_key.isdigit():
+                end_year = 2000 + int(self.season_key[2:])
+                return datetime(end_year, 6, 30).strftime("%d %b %Y")
+        except Exception:
+            pass
+        return self._display_timestamp(None)
+
 
     @staticmethod
     def _set_ctk_image(label: ctk.CTkLabel, image: ctk.CTkImage) -> None:
