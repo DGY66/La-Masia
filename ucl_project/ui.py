@@ -5,8 +5,10 @@ import csv
 import hashlib
 import logging
 import math
+import subprocess
 import tkinter as tk
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from tkinter import filedialog, messagebox
 from typing import Callable
@@ -725,6 +727,13 @@ class LeagueTableApp(ctk.CTk):
         frame.grid(row=0, column=column, padx=(0, 0))
         frame.grid_propagate(False)
 
+        image = self._get_remote_image(team.team_logo_url, f"logo:{team.team_id or team.name}", 40, 40)
+        if image is not None:
+            label = tk.Label(frame, image=image, bd=0, highlightthickness=0, bg=self.theme["table"])
+            label.image = image
+            label.place(relx=0.5, rely=0.5, anchor="center")
+            return
+
         if team.espn_id is not None:
             label = ctk.CTkLabel(frame, text="", image=self.espn_logo_placeholder)
             label.image = self.espn_logo_placeholder
@@ -745,13 +754,6 @@ class LeagueTableApp(ctk.CTk):
                 (40, 40),
                 lambda image, target=label: self._set_ctk_image(target, image),
             )
-            return
-
-        image = self._get_remote_image(team.team_logo_url, f"logo:{team.team_id or team.name}", 40, 40)
-        if image is not None:
-            label = tk.Label(frame, image=image, bd=0, highlightthickness=0, bg=self.theme["table"])
-            label.image = image
-            label.place(relx=0.5, rely=0.5, anchor="center")
             return
 
         canvas = tk.Canvas(frame, width=40, height=40, highlightthickness=0, bd=0, bg=self.theme["table"])
@@ -878,14 +880,11 @@ class LeagueTableApp(ctk.CTk):
         disk_key = hashlib.sha256(url.encode("utf-8")).hexdigest()
         cache_path = IMAGE_CACHE_DIR / f"{disk_key}{suffix}"
 
-        raw: bytes | None = None
         try:
             if cache_path.exists():
                 raw = cache_path.read_bytes()
             else:
-                request = Request(url, headers=REMOTE_HEADERS)
-                with urlopen(request, timeout=4) as response:
-                    raw = response.read()
+                raw = self._fetch_remote_image_bytes(url)
                 if raw:
                     cache_path.write_bytes(raw)
         except (HTTPError, URLError, TimeoutError, OSError) as exc:
@@ -896,14 +895,38 @@ class LeagueTableApp(ctk.CTk):
             return None
 
         try:
-            image = tk.PhotoImage(data=base64.b64encode(raw).decode("ascii"))
-            scale = max(1, math.ceil(image.width() / max_width), math.ceil(image.height() / max_height))
-            if scale > 1:
-                image = image.subsample(scale, scale)
+            from PIL import Image, ImageTk
+
+            pil_image = Image.open(BytesIO(raw)).convert("RGBA")
+            pil_image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+            image = ImageTk.PhotoImage(pil_image)
             self.logo_images[key] = image
             return image
-        except tk.TclError:
+        except Exception:
             return None
+
+    @staticmethod
+    def _fetch_remote_image_bytes(url: str) -> bytes:
+        try:
+            request = Request(url, headers=REMOTE_HEADERS)
+            with urlopen(request, timeout=4) as response:
+                return response.read()
+        except HTTPError as exc:
+            if exc.code != 403:
+                raise
+
+        command = ["curl.exe", "-s", "-L", "--max-time", "10"]
+        for key, value in REMOTE_HEADERS.items():
+            command.extend(["-H", f"{key}: {value}"])
+        command.append(url)
+
+        result = subprocess.run(command, capture_output=True, check=False)
+        if result.returncode != 0:
+            stderr = result.stderr.decode("utf-8", errors="ignore").strip()
+            raise OSError(stderr or f"curl failed with exit code {result.returncode}")
+        if not result.stdout:
+            raise OSError("empty image response")
+        return result.stdout
 
     def _draw_logo_fallback(self, canvas: tk.Canvas) -> None:
         canvas.delete("all")
