@@ -16,6 +16,7 @@ from config import COMPETITIONS, CompetitionConfig
 from espn_ids import resolve_espn_id
 from i18n import SEASONS, get_competition_title, get_table_strings
 from models import Team
+from sofascore_ids import resolve_sofascore_id
 from team_logos import get_best_team_logo
 from transfermarkt_ids import resolve_transfermarkt_id
 
@@ -576,7 +577,7 @@ class FinalStagesWindow(ctk.CTkToplevel):
             export_y,
             export_w,
             export_h,
-            "Export",
+            self._text("export", "Export"),
             self._open_export_menu,
             fg=self._theme()["export"],
             text_color="#FFFFFF",
@@ -807,12 +808,15 @@ class FinalStagesWindow(ctk.CTkToplevel):
         return text[: max(1, max_chars - 3)].rstrip() + "..."
 
     def _place_logo(self, team: KnockoutTeam, x: float, y: float, size: int) -> None:
+        sofascore_id = team.sofascore_id
+        if sofascore_id is None:
+            sofascore_id = resolve_sofascore_id(team.name, team.short_name)
         logo_team = Team(
             abbr=(team.short_name or team.name or "??")[:3].upper(),
             name=team.name,
-            team_id=team.sofascore_id,
-            espn_id=resolve_espn_id(team.name),
-            transfermarkt_id=resolve_transfermarkt_id(team.name),
+            team_id=sofascore_id,
+            espn_id=resolve_espn_id(team.name, team.short_name),
+            transfermarkt_id=resolve_transfermarkt_id(team.short_name) or resolve_transfermarkt_id(team.name),
         )
         image = get_best_team_logo(logo_team, (size, size))
         label = ctk.CTkLabel(self.canvas, text="", image=image, fg_color="transparent", width=size, height=size)
@@ -873,7 +877,8 @@ class FinalStagesWindow(ctk.CTkToplevel):
         )
 
     def _export_rows(self) -> list[list[object]]:
-        rows: list[list[object]] = [["round", "date", "home", "home_score", "away", "away_score", "note"]]
+        headers = self.strings.get("export_headers", ["round", "date", "home", "home_score", "away", "away_score", "note"])
+        rows: list[list[object]] = [headers if isinstance(headers, list) else ["round", "date", "home", "home_score", "away", "away_score", "note"]]
         for round_item in self._all_rounds():
             for match in round_item.matches:
                 rows.append([
@@ -906,11 +911,12 @@ class FinalStagesWindow(ctk.CTkToplevel):
         return f"{self.competition.short_title}_{self.season_key}_knockout.{suffix}"
 
     def _export_txt(self) -> None:
+        filetypes = self._filetypes()
         path = filedialog.asksaveasfilename(
             parent=self,
             defaultextension=".txt",
             initialfile=self._default_export_name("txt"),
-            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+            filetypes=[(filetypes["txt"], "*.txt"), (filetypes["all"], "*.*")],
         )
         if not path:
             return
@@ -923,16 +929,17 @@ class FinalStagesWindow(ctk.CTkToplevel):
         try:
             Path(path).write_text("\n".join(lines), encoding="utf-8")
         except OSError as exc:
-            messagebox.showerror("Export failed", str(exc), parent=self)
+            messagebox.showerror(str(self.strings["export_failed"]), str(exc), parent=self)
             return
-        messagebox.showinfo("Export complete", f"Saved:\n{path}", parent=self)
+        messagebox.showinfo(str(self.strings["export_complete"]), self._saved_message(path), parent=self)
 
     def _export_json(self) -> None:
+        filetypes = self._filetypes()
         path = filedialog.asksaveasfilename(
             parent=self,
             defaultextension=".json",
             initialfile=self._default_export_name("json"),
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            filetypes=[(filetypes["json"], "*.json"), (filetypes["all"], "*.*")],
         )
         if not path:
             return
@@ -944,16 +951,17 @@ class FinalStagesWindow(ctk.CTkToplevel):
         try:
             Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         except OSError as exc:
-            messagebox.showerror("Export failed", str(exc), parent=self)
+            messagebox.showerror(str(self.strings["export_failed"]), str(exc), parent=self)
             return
-        messagebox.showinfo("Export complete", f"Saved:\n{path}", parent=self)
+        messagebox.showinfo(str(self.strings["export_complete"]), self._saved_message(path), parent=self)
 
     def _export_excel(self) -> None:
+        filetypes = self._filetypes()
         path = filedialog.asksaveasfilename(
             parent=self,
             defaultextension=".xls",
             initialfile=self._default_export_name("xls"),
-            filetypes=[("Excel files", "*.xls"), ("All files", "*.*")],
+            filetypes=[(filetypes["excel"], "*.xls"), (filetypes["all"], "*.*")],
         )
         if not path:
             return
@@ -966,9 +974,22 @@ class FinalStagesWindow(ctk.CTkToplevel):
         try:
             Path(path).write_text(document, encoding="utf-8")
         except OSError as exc:
-            messagebox.showerror("Export failed", str(exc), parent=self)
+            messagebox.showerror(str(self.strings["export_failed"]), str(exc), parent=self)
             return
-        messagebox.showinfo("Export complete", f"Saved:\n{path}", parent=self)
+        messagebox.showinfo(str(self.strings["export_complete"]), self._saved_message(path), parent=self)
+
+    def _filetypes(self) -> dict[str, str]:
+        value = self.strings.get("filetypes", {})
+        return value if isinstance(value, dict) else {
+            "all": "All files",
+            "txt": "Text files",
+            "json": "JSON files",
+            "excel": "Excel files",
+        }
+
+    def _saved_message(self, path: str) -> str:
+        template = self.strings.get("saved", "Saved:\n{path}")
+        return str(template).format(path=path)
 
     def _round_name(self, name: str) -> str:
         normalized = _round_key(name, 0)
@@ -981,7 +1002,7 @@ class FinalStagesWindow(ctk.CTkToplevel):
         if "final" in normalized and "semi" not in normalized:
             return self._text("final", "Final")
         if "playoff" in normalized or "play" in normalized:
-            return "Play-off"
+            return self._text("play_off", "Play-off")
         return name
 
     def _text(self, key: str, fallback: str) -> str:
