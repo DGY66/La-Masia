@@ -13,7 +13,7 @@ from cache import get_cached, set_cached
 from config import CompetitionConfig, RAPIDAPI_BASE_URL, RAPIDAPI_HOST, REQUEST_TIMEOUT
 from espn_ids import resolve_espn_id
 from models import FormResult, Team
-from sofascore_ids import resolve_sofascore_id
+from team_id_mapping import get_api_football_id
 from transfermarkt_ids import resolve_transfermarkt_id
 
 logger = logging.getLogger(__name__)
@@ -33,10 +33,6 @@ PUBLIC_HEADERS = {
 
 
 class ApiError(Exception):
-    pass
-
-
-class NoSeasonDataError(ApiError):
     pass
 
 
@@ -131,9 +127,6 @@ class SofaScoreApiClient:
         season_key: str = "2526",
     ) -> list[int]:
         """Return a list of season IDs matching the requested season_key."""
-        if competition.key == "uecl" and _safe_int(season_key, 0) < 2122:
-            raise NoSeasonDataError(f"{competition.short_title} has no data before 2021/22")
-
         candidates: list[int] = []
 
         # Convert "1516" to variants like "15/16", "2015/16", "2015/2016"
@@ -338,29 +331,16 @@ class SofaScoreApiClient:
                     if isinstance(raw_alpha2, str) and raw_alpha2.strip():
                         country_alpha2 = raw_alpha2.strip()
 
-                raw_name = str(t_info.get("name", "Unknown"))
-                raw_short_name = t_info.get("shortName")
-                raw_name_code = t_info.get("nameCode")
-                raw_slug = t_info.get("slug")
-                raw_team_id = _safe_int(t_info.get("id"), 0) or resolve_sofascore_id(
-                    raw_name,
-                    str(raw_short_name) if raw_short_name is not None else None,
-                    str(raw_name_code) if raw_name_code is not None else None,
-                    str(raw_slug) if raw_slug is not None else None,
-                )
+                sofascore_team_id = _safe_int(t_info.get("id"), 0) or None
                 team = Team(
-                    abbr=str(raw_name_code or raw_short_name or "??")[:3].upper(),
-                    name=raw_name,
-                    team_id=raw_team_id,
+                    abbr=str(t_info.get("nameCode") or t_info.get("shortName") or "??")[:3].upper(),
+                    name=str(t_info.get("name", "Unknown")),
+                    team_id=sofascore_team_id,
                     country_name=country_name,
                     country_alpha2=country_alpha2,
-                    espn_id=resolve_espn_id(
-                        raw_name,
-                        str(raw_short_name) if raw_short_name is not None else None,
-                        str(raw_name_code) if raw_name_code is not None else None,
-                        str(raw_slug) if raw_slug is not None else None,
-                    ),
-                    transfermarkt_id=resolve_transfermarkt_id(raw_name),
+                    espn_id=resolve_espn_id(str(t_info.get("name", "Unknown"))),
+                    transfermarkt_id=resolve_transfermarkt_id(str(t_info.get("name", "Unknown"))),
+                    api_football_id=get_api_football_id(sofascore_team_id),
                 )
                 team.pld = _safe_int(row.get("matches"))
                 team.w = _safe_int(row.get("wins"))

@@ -40,10 +40,10 @@ VISIBLE_SECTIONS: Final[int] = 2
 VISIBLE_TEAMS: Final[int] = 16
 
 COL_HEADERS: Final[list[str]] = [
-    "#", "CLUB", "", "PLD", "W", "D", "L", "For", "GA", "GD", "PTS", "FORM",
+    "#", "CLUB", "PLD", "W", "D", "L", "For", "GA", "GD", "PTS", "FORM",
 ]
 
-COL_WIDTHS: Final[list[int]] = [44, 58, 420, 52, 44, 44, 44, 50, 50, 50, 54, 320]
+COL_WIDTHS: Final[list[int]] = [54, 500, 64, 58, 58, 58, 68, 68, 64, 70, 300]
 
 ZONE_COLORS: Final[dict[str, str]] = {
     "r16": "#00D628",
@@ -56,13 +56,13 @@ FORM_WIN: Final[str] = "#48F15A"
 FORM_DRAW: Final[str] = "#A6B9AB"
 FORM_LOSS: Final[str] = "#FF4B4B"
 
-APP_BG: Final[str] = "#FFFFFF"
-OUTER_BG: Final[str] = "#FFFFFF"
-CARD_BG: Final[str] = "#F3F7FC"
-CARD_SHADOW: Final[str] = "#E9EEF7"
-ROW_BG: Final[str] = "#F3F7FC"
-ROW_ALT_BG: Final[str] = "#F3F7FC"
-SECTION_BG: Final[str] = "#EDF2F8"
+APP_BG: Final[str] = "#AFC0F7"
+OUTER_BG: Final[str] = "#AFC0F7"
+CARD_BG: Final[str] = "#D8E2FF"
+CARD_SHADOW: Final[str] = "#6D789A"
+ROW_BG: Final[str] = "#D8E2FF"
+ROW_ALT_BG: Final[str] = "#D8E2FF"
+SECTION_BG: Final[str] = "#D8E2FF"
 TEXT_COLOR: Final[str] = "#111111"
 SUBTEXT_COLOR: Final[str] = "#6F6F6F"
 MUTED_TEXT: Final[str] = "#D9D9D9"
@@ -70,7 +70,7 @@ LINK_COLOR: Final[str] = "#000000"
 SCROLLBAR_COLOR: Final[str] = "#B7C2D6"
 SCROLLBAR_HOVER: Final[str] = "#93A4C4"
 SEPARATOR_COLOR: Final[str] = "#606060"
-CARD_BORDER: Final[str] = "#E8EDF5"
+CARD_BORDER: Final[str] = "#050B3F"
 
 RAPIDAPI_HOST: Final[str] = "sportapi7.p.rapidapi.com"
 RAPIDAPI_BASE_URL: Final[str] = f"https://{RAPIDAPI_HOST}/api/v1"
