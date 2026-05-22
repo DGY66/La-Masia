@@ -11,12 +11,11 @@ from typing import Any
 
 import customtkinter as ctk
 
-from api_football_logos import get_best_team_logo
 from config import COMPETITIONS, CompetitionConfig
 from espn_ids import resolve_espn_id
 from i18n import SEASONS, get_competition_title, get_table_strings
 from models import Team
-from team_id_mapping import get_api_football_id
+from team_logos import get_best_team_logo
 from transfermarkt_ids import resolve_transfermarkt_id
 
 
@@ -504,7 +503,7 @@ class FinalStagesWindow(ctk.CTkToplevel):
     def _draw_header(self, width: int) -> None:
         title = get_competition_title(self.language, self.competition.key, self.competition.title)
         self.canvas.create_text(
-            self._x(40),
+            self._x(122),
             self._y(28),
             text=f"{title} Winner",
             fill="white",
@@ -531,6 +530,16 @@ class FinalStagesWindow(ctk.CTkToplevel):
             )
 
     def _draw_controls(self) -> None:
+        back = self._make_button(
+            self._text("back", "Back"),
+            self._close,
+            fg="#FFFFFF",
+            text_color="#101010",
+            width=max(72, int(78 * self._ui_scale)),
+            height=max(24, int(28 * self._ui_scale)),
+        )
+        self.canvas.create_window(self._x(42), self._y(30), window=back, anchor="nw")
+
         by_date = self._make_button(
             self._text("by_date", "By date"),
             lambda: self._set_mode("date"),
@@ -810,7 +819,6 @@ class FinalStagesWindow(ctk.CTkToplevel):
             team_id=team.sofascore_id,
             espn_id=resolve_espn_id(team.name),
             transfermarkt_id=resolve_transfermarkt_id(team.name),
-            api_football_id=get_api_football_id(team.sofascore_id),
         )
         image = get_best_team_logo(logo_team, (size, size))
         label = ctk.CTkLabel(self.canvas, text="", image=image, fg_color="transparent", width=size, height=size)

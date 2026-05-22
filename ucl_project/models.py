@@ -16,7 +16,6 @@ class Team:
         "country_alpha2",
         "espn_id",
         "transfermarkt_id",
-        "api_football_id",
         "team_logo_url",
         "country_flag_url",
         "pld",
@@ -38,7 +37,6 @@ class Team:
         country_alpha2: str | None = None,
         espn_id: int | None = None,
         transfermarkt_id: int | None = None,
-        api_football_id: int | None = None,
     ) -> None:
         self.team_id: int | None = team_id
         self.abbr: str = abbr
@@ -47,7 +45,6 @@ class Team:
         self.country_alpha2: str | None = country_alpha2.upper() if country_alpha2 else None
         self.espn_id: int | None = espn_id
         self.transfermarkt_id: int | None = transfermarkt_id
-        self.api_football_id: int | None = api_football_id
         self.team_logo_url: str | None = (
             f"https://img.sofascore.com/api/v1/team/{team_id}/image" if team_id else None
         )

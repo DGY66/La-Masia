@@ -13,7 +13,6 @@ from cache import get_cached, set_cached
 from config import CompetitionConfig, RAPIDAPI_BASE_URL, RAPIDAPI_HOST, REQUEST_TIMEOUT
 from espn_ids import resolve_espn_id
 from models import FormResult, Team
-from team_id_mapping import get_api_football_id
 from transfermarkt_ids import resolve_transfermarkt_id
 
 logger = logging.getLogger(__name__)
@@ -340,7 +339,6 @@ class SofaScoreApiClient:
                     country_alpha2=country_alpha2,
                     espn_id=resolve_espn_id(str(t_info.get("name", "Unknown"))),
                     transfermarkt_id=resolve_transfermarkt_id(str(t_info.get("name", "Unknown"))),
-                    api_football_id=get_api_football_id(sofascore_team_id),
                 )
                 team.pld = _safe_int(row.get("matches"))
                 team.w = _safe_int(row.get("wins"))

@@ -45,7 +45,6 @@ from models import Team
 from espn_logos import ESPNLogoManager
 from transfermarkt_logos import TransfermarktLogoManager
 from final_stages import FinalStagesWindow
-from api_football_logos import clear_team_logo_cache, get_api_football_id, get_team_logo, has_team_logo
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
@@ -149,7 +148,6 @@ class LeagueTableApp(ctk.CTk):
         self.minsize(1240, 820)
         self.configure(fg_color=APP_BG)
         self.protocol("WM_DELETE_WINDOW", self._close_window)
-        clear_team_logo_cache()
 
         self.teams: list[Team] = []
         self.last_update: str = self._display_timestamp(None)
@@ -726,15 +724,6 @@ class LeagueTableApp(ctk.CTk):
         frame = ctk.CTkFrame(parent, fg_color="transparent", width=46, height=46)
         frame.grid(row=0, column=column, padx=(0, 0))
         frame.grid_propagate(False)
-
-        api_football_id = team.api_football_id or get_api_football_id(team.team_id)
-        if api_football_id is not None and has_team_logo(api_football_id):
-            team.api_football_id = api_football_id
-            image = get_team_logo(api_football_id, (40, 40))
-            label = ctk.CTkLabel(frame, text="", image=image)
-            label.image = image
-            label.place(relx=0.5, rely=0.5, anchor="center")
-            return
 
         if team.espn_id is not None:
             label = ctk.CTkLabel(frame, text="", image=self.espn_logo_placeholder)
