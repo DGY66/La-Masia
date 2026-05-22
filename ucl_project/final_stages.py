@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import csv
+import json
 import logging
 import tkinter as tk
 from dataclasses import dataclass
 from datetime import datetime
+from html import escape
 from pathlib import Path
 from tkinter import filedialog, messagebox
 from typing import Any
@@ -15,6 +16,7 @@ from config import COMPETITIONS, CompetitionConfig
 from espn_ids import resolve_espn_id
 from i18n import SEASONS, get_competition_title, get_table_strings
 from models import Team
+from sofascore_ids import resolve_sofascore_id
 from team_logos import get_best_team_logo
 from transfermarkt_ids import resolve_transfermarkt_id
 
@@ -22,9 +24,9 @@ from transfermarkt_ids import resolve_transfermarkt_id
 logger = logging.getLogger(__name__)
 
 BASE_W = 1440
-LAYOUT_W = 1024
+LAYOUT_W = 1280
 LAYOUT_H = 720
-MIN_UI_SCALE = 0.78
+MIN_UI_SCALE = 0.72
 MAX_UI_SCALE = 1.0
 OLD_UECL_SEASONS = {"1516", "1617", "1718", "1819", "1920", "2021"}
 
@@ -85,9 +87,24 @@ def _fallback_match(
 
 COMMON_2425_ROUNDS: tuple[KnockoutRound, ...] = (
     KnockoutRound(
+        key="round_of_16",
+        name="Round of 16",
+        order=1,
+        matches=(
+            _fallback_match("Real Madrid", "Atl. Madrid", "2 (4)", "2 (2)"),
+            _fallback_match("Arsenal", "PSV", 9, 3),
+            _fallback_match("PSG", "Liverpool", "1 (4)", "1 (1)"),
+            _fallback_match("Aston Villa", "Club Brugge", 6, 1),
+            _fallback_match("Barcelona", "Benfica", 4, 1),
+            _fallback_match("Dortmund", "Lille", 3, 2),
+            _fallback_match("Bayern", "Leverkusen", 5, 0),
+            _fallback_match("Inter", "Feyenoord", 4, 2),
+        ),
+    ),
+    KnockoutRound(
         key="quarterfinals",
         name="Quarterfinals",
-        order=1,
+        order=2,
         matches=(
             _fallback_match("Real Madrid", "Arsenal", 1, 5),
             _fallback_match("PSG", "Aston Villa", 5, 4),
@@ -98,7 +115,7 @@ COMMON_2425_ROUNDS: tuple[KnockoutRound, ...] = (
     KnockoutRound(
         key="semifinals",
         name="Semifinals",
-        order=2,
+        order=3,
         matches=(
             _fallback_match("Arsenal", "PSG", 1, 3),
             _fallback_match("Barcelona", "Inter", 6, 7),
@@ -107,7 +124,7 @@ COMMON_2425_ROUNDS: tuple[KnockoutRound, ...] = (
     KnockoutRound(
         key="final",
         name="Final",
-        order=3,
+        order=4,
         matches=(_fallback_match("Inter", "PSG", 0, 5),),
     ),
 )
@@ -115,9 +132,24 @@ COMMON_2425_ROUNDS: tuple[KnockoutRound, ...] = (
 
 UEL_2425_ROUNDS: tuple[KnockoutRound, ...] = (
     KnockoutRound(
+        key="round_of_16",
+        name="Round of 16",
+        order=1,
+        matches=(
+            _fallback_match("Tottenham", "AZ", 3, 2),
+            _fallback_match("Frankfurt", "Ajax", 6, 2),
+            _fallback_match("Lazio", "Viktoria Plzen", 3, 2),
+            _fallback_match("Bode/Glimt", "Olympiacos", 4, 2),
+            _fallback_match("Rangers", "Fenerbahce", "3 (3)", "3 (2)"),
+            _fallback_match("Athletic Club", "Roma", 4, 3),
+            _fallback_match("Lyon", "FCSB", 7, 1),
+            _fallback_match("MAN UTD.", "Real Sociedad", 5, 2),
+        ),
+    ),
+    KnockoutRound(
         key="quarterfinals",
         name="Quarterfinals",
-        order=1,
+        order=2,
         matches=(
             _fallback_match("Tottenham", "Frankfurt", 2, 1),
             _fallback_match("Lazio", "Bode/Glimt", "3 (3)", "3 (2)"),
@@ -128,7 +160,7 @@ UEL_2425_ROUNDS: tuple[KnockoutRound, ...] = (
     KnockoutRound(
         key="semifinals",
         name="Semifinals",
-        order=2,
+        order=3,
         matches=(
             _fallback_match("Bode/Glimt", "Tottenham", 1, 5),
             _fallback_match("Athletic Club", "MAN UTD.", 1, 7),
@@ -137,7 +169,7 @@ UEL_2425_ROUNDS: tuple[KnockoutRound, ...] = (
     KnockoutRound(
         key="final",
         name="Final",
-        order=3,
+        order=4,
         matches=(_fallback_match("MAN UTD.", "Tottenham", 0, 1),),
     ),
 )
@@ -145,9 +177,24 @@ UEL_2425_ROUNDS: tuple[KnockoutRound, ...] = (
 
 UECL_2425_ROUNDS: tuple[KnockoutRound, ...] = (
     KnockoutRound(
+        key="round_of_16",
+        name="Round of 16",
+        order=1,
+        matches=(
+            _fallback_match("Jagiellonia", "Cercle Brugge", 3, 2),
+            _fallback_match("Real Betis", "Vitoria SC", 6, 2),
+            _fallback_match("Fiorentina", "Panathinaikos", 5, 4),
+            _fallback_match("Celje", "Lugano", "5 (3)", "5 (1)"),
+            _fallback_match("Chelsea", "Copenhagen", 3, 1),
+            _fallback_match("Legia", "Molde", 4, 3),
+            _fallback_match("Djurgardens", "Pafos", 3, 1),
+            _fallback_match("Rapid", "Borac", 3, 2),
+        ),
+    ),
+    KnockoutRound(
         key="quarterfinals",
         name="Quarterfinals",
-        order=1,
+        order=2,
         matches=(
             _fallback_match("Jagiellonia", "Real Betis", 1, 3),
             _fallback_match("Fiorentina", "Celje", 4, 3),
@@ -158,7 +205,7 @@ UECL_2425_ROUNDS: tuple[KnockoutRound, ...] = (
     KnockoutRound(
         key="semifinals",
         name="Semifinals",
-        order=2,
+        order=3,
         matches=(
             _fallback_match("Fiorentina", "Real Betis", 3, 4),
             _fallback_match("Djurgårdens", "Chelsea", 1, 5),
@@ -167,7 +214,7 @@ UECL_2425_ROUNDS: tuple[KnockoutRound, ...] = (
     KnockoutRound(
         key="final",
         name="Final",
-        order=3,
+        order=4,
         matches=(_fallback_match("Real Betis", "Chelsea", 1, 4),),
     ),
 )
@@ -252,7 +299,7 @@ class KnockoutDataProvider:
             "tournament": competition.key,
             "season": season,
             "season_id": season_id,
-            "title": f"{competition.title} Winner",
+            "title": f"{competition.title} Knockout stage",
             "rounds": rounds,
             "final": final,
             "source": "sofascore",
@@ -399,20 +446,18 @@ class FinalStagesWindow(ctk.CTkToplevel):
         self.strings = get_table_strings(language)
         self.provider = KnockoutDataProvider()
         self.data = self.provider.get_knockout_data(competition_key, season_key)
-        self.view_mode = "round"
-        self.selected_round = "All"
         self._ui_scale = 1.0
         self._widgets: list[tk.Widget] = []
         self._images: list[object] = []
         self._box_centers: dict[tuple[int, int], tuple[float, float]] = {}
+        self._export_menu_anchor: tuple[float, float, int] = (0, 0, 0)
 
         self.title(self._window_title())
-        self.geometry("1440x900")
-        self.minsize(1040, 720)
+        self.geometry("1280x760")
+        self.minsize(1120, 700)
         self.configure(fg_color=self._theme()["bg1"])
         self.protocol("WM_DELETE_WINDOW", self._close)
-        self.attributes("-fullscreen", True)
-        self.bind("<Escape>", lambda _event: self.attributes("-fullscreen", False))
+        self.bind("<Escape>", lambda _event: self._close())
 
         self.canvas = tk.Canvas(self, highlightthickness=0, bd=0, bg=self._theme()["bg1"])
         self.v_scroll = tk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
@@ -430,8 +475,7 @@ class FinalStagesWindow(ctk.CTkToplevel):
 
     def _window_title(self) -> str:
         season = self._season_label()
-        title = get_competition_title(self.language, self.competition.key, self.competition.title)
-        return f"{title} Winner - {season}"
+        return f"{self._knockout_title()} - {season}"
 
     def _redraw(self, _event: object | None = None) -> None:
         width = max(self.canvas.winfo_width(), 2)
@@ -441,7 +485,7 @@ class FinalStagesWindow(ctk.CTkToplevel):
         self._clear_widgets()
         self._draw_background(width, height)
         self._draw_header(width)
-        self._draw_controls()
+        self._draw_controls(width)
 
         status = self.data.get("status")
         if status == "not_started":
@@ -453,10 +497,7 @@ class FinalStagesWindow(ctk.CTkToplevel):
             self.canvas.configure(scrollregion=(0, 0, width, height))
             return
 
-        if self.view_mode == "date":
-            content_w, content_h = self._draw_by_date(width)
-        else:
-            content_w, content_h = self._draw_by_round(width)
+        content_w, content_h = self._draw_by_round(width)
         self.canvas.configure(scrollregion=(0, 0, max(width, content_w), max(height, content_h)))
 
     def _clear_widgets(self) -> None:
@@ -501,112 +542,102 @@ class FinalStagesWindow(ctk.CTkToplevel):
         self.canvas.create_image(width * 0.42, height * 0.54, image=photo, tags="background")
 
     def _draw_header(self, width: int) -> None:
-        title = get_competition_title(self.language, self.competition.key, self.competition.title)
         self.canvas.create_text(
             self._x(122),
             self._y(28),
-            text=f"{title} Winner",
+            text=self._knockout_title(),
             fill="white",
             font=("Arial", self._font(30), "bold italic"),
             anchor="nw",
         )
-        self.canvas.create_text(
-            width - self._x(40),
-            self._y(38),
-            text=self._season_label(),
-            fill="white",
-            font=("Arial", self._font(12), "bold"),
-            anchor="ne",
-        )
-        source = str(self.data.get("source") or "")
-        if source:
-            self.canvas.create_text(
-                width - self._x(40),
-                self._y(58),
-                text=source.upper(),
-                fill="#DDE4FF",
-                font=("Arial", self._font(9), "bold"),
-                anchor="ne",
-            )
 
-    def _draw_controls(self) -> None:
-        back = self._make_button(
+    def _knockout_title(self) -> str:
+        title = get_competition_title(self.language, self.competition.key, self.competition.title)
+        template = self._text("knockout_stage_title", "{competition} Knockout stage")
+        return template.format(competition=title)
+
+    def _draw_controls(self, width: int) -> None:
+        self._draw_canvas_button(
+            self._x(32),
+            self._y(30),
+            max(72, int(78 * self._ui_scale)),
+            max(24, int(28 * self._ui_scale)),
             self._text("back", "Back"),
             self._close,
-            fg="#FFFFFF",
-            text_color="#101010",
-            width=max(72, int(78 * self._ui_scale)),
-            height=max(24, int(28 * self._ui_scale)),
+            fg="#050505",
+            text_color="#FFFFFF",
+            hover_color="#2B2B2B",
+            font_size=self._font(12),
         )
-        self.canvas.create_window(self._x(42), self._y(30), window=back, anchor="nw")
-
-        by_date = self._make_button(
-            self._text("by_date", "By date"),
-            lambda: self._set_mode("date"),
-            fg="#FFFFFF" if self.view_mode == "round" else "#050505",
-            text_color="#111111" if self.view_mode == "round" else "#FFFFFF",
-            width=max(118, int(150 * self._ui_scale)),
-            height=max(30, int(38 * self._ui_scale)),
+        export_w, export_h = self._export_button_size()
+        export_x = width - self._x(40) - export_w
+        export_y = self._y(28)
+        self._draw_canvas_button(
+            export_x,
+            export_y,
+            export_w,
+            export_h,
+            self._text("export", "Export"),
+            self._open_export_menu,
+            fg=self._theme()["export"],
+            text_color="#FFFFFF",
+            hover_color=self._theme()["export_hover"],
+            border_width=max(1, int(2 * self._ui_scale)),
+            border_color="#FFFFFF",
+            font_size=self._font(20 if self.competition.key == "ucl" else 10),
         )
-        by_round = self._make_button(
-            self._text("by_round", "By round"),
-            lambda: self._set_mode("round"),
-            fg="#050505" if self.view_mode == "round" else "#FFFFFF",
-            text_color="#FFFFFF" if self.view_mode == "round" else "#111111",
-            width=max(118, int(150 * self._ui_scale)),
-            height=max(30, int(38 * self._ui_scale)),
+        self._export_menu_anchor = (export_x, export_y, export_h)
+
+    def _draw_canvas_button(
+        self,
+        x: float,
+        y: float,
+        width: int,
+        height: int,
+        text: str,
+        command,
+        fg: str,
+        text_color: str,
+        hover_color: str | None = None,
+        border_width: int = 0,
+        border_color: str | None = None,
+        font_size: int | None = None,
+    ) -> None:
+        radius = height / 2
+        tag = f"button_{len(self.canvas.find_all())}"
+        points = [
+            x + radius, y, x + width - radius, y, x + width, y, x + width, y + radius,
+            x + width, y + height - radius, x + width, y + height, x + width - radius, y + height,
+            x + radius, y + height, x, y + height, x, y + height - radius,
+            x, y + radius, x, y,
+        ]
+        rect_id = self.canvas.create_polygon(
+            points,
+            smooth=True,
+            fill=fg,
+            outline=border_color or fg,
+            width=border_width,
+            tags=(tag,),
         )
-        self.canvas.create_window(self._x(42), self._y(82), window=by_date, anchor="nw")
-        self.canvas.create_window(self._x(164), self._y(82), window=by_round, anchor="nw")
-
-        if self.view_mode == "round":
-            round_values = [self._text("final", "Final")]
-            round_menu = ctk.CTkOptionMenu(
-                self.canvas,
-                values=round_values,
-                command=self._select_round,
-                width=max(120, int(128 * self._ui_scale)),
-                height=max(34, int(38 * self._ui_scale)),
-                corner_radius=max(7, int(8 * self._ui_scale)),
-                fg_color=self._theme()["box"],
-                button_color="#FFFFFF",
-                button_hover_color="#EDEDED",
-                text_color="#FFFFFF",
-                dropdown_fg_color="#17258D",
-                dropdown_text_color="#FFFFFF",
-                font=ctk.CTkFont(family="Arial", size=self._font(15), weight="bold"),
-            )
-            round_menu.set(round_values[0])
-            self._widgets.append(round_menu)
-            self.canvas.create_window(self._x(98), self._y(128), window=round_menu, anchor="nw")
-
-        export = self._make_button("Export", self._export_csv, fg=self._theme()["export"], text_color="#FFFFFF", width=max(58, int(56 * self._ui_scale)), height=max(20, int(22 * self._ui_scale)))
-        self.canvas.create_window(self._x(884), self._y(30), window=export, anchor="nw")
-
-    def _make_button(self, label_text: str, command, fg: str, text_color: str, width: int, height: int) -> ctk.CTkButton:
-        button = ctk.CTkButton(
-            self.canvas,
-            text=label_text,
-            command=command,
-            width=width,
-            height=height,
-            corner_radius=height // 2,
-            fg_color=fg,
-            hover_color="#2B2B2B" if fg == "#050505" else "#EDEDED",
-            text_color=text_color,
-            font=ctk.CTkFont(family="Arial", size=self._font(12), weight="bold"),
+        text_id = self.canvas.create_text(
+            x + width / 2,
+            y + height / 2,
+            text=text,
+            fill=text_color,
+            font=("Arial", font_size or self._font(12), "bold"),
+            anchor="center",
+            tags=(tag,),
         )
-        self._widgets.append(button)
-        return button
+        active_color = hover_color or fg
+        self.canvas.tag_bind(tag, "<Enter>", lambda _event: self.canvas.itemconfigure(rect_id, fill=active_color))
+        self.canvas.tag_bind(tag, "<Leave>", lambda _event: self.canvas.itemconfigure(rect_id, fill=fg))
+        self.canvas.tag_bind(tag, "<Button-1>", lambda _event: command())
+        self.canvas.tag_raise(text_id, rect_id)
 
-    def _set_mode(self, mode: str) -> None:
-        self.view_mode = mode
-        self._redraw()
-
-    def _select_round(self, value: str) -> None:
-        self.selected_round = value
-        self.view_mode = "round"
-        self._redraw()
+    def _export_button_size(self) -> tuple[int, int]:
+        if self.competition.key == "ucl":
+            return max(112, int(126 * self._ui_scale)), max(38, int(45 * self._ui_scale))
+        return max(56, int(58 * self._ui_scale)), max(20, int(22 * self._ui_scale))
 
     def _draw_by_round(self, width: int) -> tuple[int, int]:
         rounds = self._reference_rounds()
@@ -614,21 +645,13 @@ class FinalStagesWindow(ctk.CTkToplevel):
             self._draw_message(self._text("no_knockout_data", "Knockout data is not available for this season."))
             return width, 760
 
-        final = self.data.get("final")
-        if isinstance(final, KnockoutMatch):
-            self._draw_feature_final(final)
-
-        box_w = self._x(270)
-        box_h = self._y(62)
-        x_positions = [self._x(64), self._x(388), self._x(710)]
-        title_y = self._y(290)
-        base_positions = {
-            0: [self._y(325), self._y(400), self._y(475), self._y(550)],
-            1: [self._y(363), self._y(513)],
-            2: [self._y(439)],
-        }
+        box_w = self._x(235 if len(rounds) >= 4 else 270)
+        box_h = self._y(46 if len(rounds) >= 4 else 62)
+        x_positions = self._round_x_positions(len(rounds))
+        title_y = self._y(126 if len(rounds) >= 4 else 190)
+        base_positions = self._round_y_positions(rounds, box_h)
         content_h = self._y(705)
-        content_w = self._x(1010)
+        content_w = self._x(1245 if len(rounds) >= 4 else 1010)
 
         centers_by_round: list[list[tuple[float, float]]] = []
         for round_index, round_item in enumerate(rounds):
@@ -676,6 +699,40 @@ class FinalStagesWindow(ctk.CTkToplevel):
 
         return int(content_w), int(content_h)
 
+    def _round_x_positions(self, round_count: int) -> list[int]:
+        if round_count >= 4:
+            return [self._x(value) for value in (32, 342, 652, 962)]
+        if round_count == 1:
+            return [self._x(500)]
+        if round_count == 2:
+            return [self._x(value) for value in (250, 650)]
+        return [self._x(value) for value in (64, 388, 710)]
+
+    def _round_y_positions(self, rounds: tuple[KnockoutRound, ...], box_h: int) -> dict[int, list[int]]:
+        if len(rounds) >= 4:
+            centers = {
+                0: [self._y(value) for value in (168, 236, 304, 372, 440, 508, 576, 644)],
+                1: [self._y(value) for value in (202, 338, 474, 610)],
+                2: [self._y(value) for value in (270, 542)],
+                3: [self._y(406)],
+            }
+            return {
+                index: [int(center - box_h / 2) for center in centers.get(index, [])]
+                for index in range(len(rounds))
+            }
+        if len(rounds) == 1:
+            return {0: [self._y(340)]}
+        if len(rounds) == 2:
+            return {
+                0: [self._y(275), self._y(425)],
+                1: [self._y(350)],
+            }
+        return {
+            0: [self._y(225), self._y(300), self._y(375), self._y(450)],
+            1: [self._y(263), self._y(413)],
+            2: [self._y(339)],
+        }
+
     def _draw_connectors(
         self,
         rounds: tuple[KnockoutRound, ...],
@@ -695,69 +752,6 @@ class FinalStagesWindow(ctk.CTkToplevel):
                 y2 = nxt[next_index][1]
                 mid = x1 + (x2 - x1) * 0.55
                 self.canvas.create_line(x1, y1, mid, y1, mid, y2, x2, y2, fill=LINE_COLOR, width=max(2, int(2 * self._ui_scale)))
-
-    def _draw_by_date(self, width: int) -> tuple[int, int]:
-        matches: list[tuple[str, str, KnockoutMatch]] = []
-        for round_item in self._all_rounds():
-            for match in round_item.matches:
-                matches.append((match.date or "TBD", self._round_name(round_item.name), match))
-        matches.sort(key=lambda item: item[0])
-
-        y = self._y(205)
-        label_x = self._x(42)
-        date_x = self._x(180)
-        box_x = self._x(222)
-        box_w = self._x(430)
-        box_h = self._y(58)
-        row_gap = self._y(68)
-        self.canvas.create_text(
-            label_x,
-            y - self._y(32),
-            text=self._text("matches", "Matches"),
-            fill="white",
-            font=("Arial", self._font(18), "bold"),
-            anchor="w",
-        )
-        for _, round_name, match in matches:
-            self.canvas.create_text(
-                label_x,
-                y + box_h / 2,
-                text=round_name,
-                fill="#DDE4FF",
-                font=("Arial", self._font(11), "bold"),
-                anchor="w",
-                width=max(90, date_x - label_x - self._x(14)),
-            )
-            self._draw_match_box(box_x, y, box_w, box_h, match, small=True)
-            if match.date:
-                self.canvas.create_text(
-                    date_x,
-                    y + box_h / 2,
-                    text=f"{match.date}\nFT",
-                    fill="#D7D7D7",
-                    font=("Arial", self._font(10), "bold"),
-                    justify="center",
-                    anchor="e",
-                )
-            y += row_gap
-        return max(width, int(box_x + box_w + self._x(42))), int(y + self._y(36))
-
-    def _draw_feature_final(self, match: KnockoutMatch) -> None:
-        x = self._x(132)
-        y = self._y(188)
-        self.canvas.create_line(x, y, x, y + self._y(82), fill="#E8E8E8", width=max(3, int(3 * self._ui_scale)))
-        self.canvas.create_line(x + self._x(18), y + self._y(41), x + self._x(250), y + self._y(41), fill="#E8E8E8", width=max(2, int(2 * self._ui_scale)))
-        self.canvas.create_text(
-            x - self._x(20),
-            y + self._y(42),
-            text=f"{match.date or ''}\nFT",
-            fill="#D7D7D7",
-            font=("Arial", self._font(13), "bold"),
-            justify="center",
-            anchor="e",
-        )
-        self._draw_team_line(match.home, match.home_score, x + self._x(36), y + self._y(22), x + self._x(250), False, large=True)
-        self._draw_team_line(match.away, match.away_score, x + self._x(36), y + self._y(67), x + self._x(250), False, large=True)
 
     def _draw_match_box(self, x: float, y: float, w: float, h: float, match: KnockoutMatch, small: bool) -> tuple[float, float]:
         theme = self._theme()
@@ -783,7 +777,8 @@ class FinalStagesWindow(ctk.CTkToplevel):
         text_size = self._font(18 if large else 11)
         score_size = self._font(20 if large else 11)
         weight = "bold" if large else "normal"
-        max_name_width = max(70, score_x - x - size - self._x(36))
+        score_gap = self._x(78 if large else 50)
+        max_name_width = max(70, score_x - x - size - score_gap)
         label = team.short_name.upper() if large else team.short_name
         label = self._fit_label(label, text_size, max_name_width)
         self._place_logo(team, x, y - size / 2, size)
@@ -813,12 +808,15 @@ class FinalStagesWindow(ctk.CTkToplevel):
         return text[: max(1, max_chars - 3)].rstrip() + "..."
 
     def _place_logo(self, team: KnockoutTeam, x: float, y: float, size: int) -> None:
+        sofascore_id = team.sofascore_id
+        if sofascore_id is None:
+            sofascore_id = resolve_sofascore_id(team.name, team.short_name)
         logo_team = Team(
             abbr=(team.short_name or team.name or "??")[:3].upper(),
             name=team.name,
-            team_id=team.sofascore_id,
-            espn_id=resolve_espn_id(team.name),
-            transfermarkt_id=resolve_transfermarkt_id(team.name),
+            team_id=sofascore_id,
+            espn_id=resolve_espn_id(team.name, team.short_name),
+            transfermarkt_id=resolve_transfermarkt_id(team.short_name) or resolve_transfermarkt_id(team.name),
         )
         image = get_best_team_logo(logo_team, (size, size))
         label = ctk.CTkLabel(self.canvas, text="", image=image, fg_color="transparent", width=size, height=size)
@@ -838,27 +836,24 @@ class FinalStagesWindow(ctk.CTkToplevel):
             width=880,
         )
 
-    def _round_values(self) -> list[str]:
-        values = ["All"]
-        values.extend(self._round_name(round_item.name) for round_item in self._all_rounds())
-        return values
-
     def _reference_rounds(self) -> tuple[KnockoutRound, ...]:
         rounds = list(self._all_rounds())
         selected: list[KnockoutRound] = []
-        for wanted in ("quarter", "semi", "final"):
+        for wanted in ("r16", "quarter", "semi", "final"):
             match = next((item for item in rounds if self._is_round(item.name, wanted)), None)
             if match is not None:
                 selected.append(match)
         if len(selected) >= 3:
-            return tuple(selected[-3:])
+            return tuple(selected[-4:])
         if len(rounds) >= 3:
-            return tuple(rounds[-3:])
+            return tuple(rounds[-4:])
         return tuple(rounds)
 
     @staticmethod
     def _is_round(name: str, wanted: str) -> bool:
         normalized = _round_key(name, 0)
+        if wanted == "r16":
+            return "round_of_16" in normalized or "last_16" in normalized or "1_8" in normalized or "18" in normalized
         if wanted == "final":
             return "final" in normalized and "quarter" not in normalized and "semi" not in normalized
         return wanted in normalized
@@ -866,26 +861,24 @@ class FinalStagesWindow(ctk.CTkToplevel):
     def _is_final_round(self, name: str) -> bool:
         return self._is_round(name, "final")
 
-    def _visible_rounds(self) -> tuple[KnockoutRound, ...]:
-        rounds = self._all_rounds()
-        if self.selected_round == "All":
-            return rounds
-        return tuple(round_item for round_item in rounds if self._round_name(round_item.name) == self.selected_round)
-
     def _all_rounds(self) -> tuple[KnockoutRound, ...]:
         rounds = self.data.get("rounds")
         return rounds if isinstance(rounds, tuple) else ()
 
-    def _export_csv(self) -> None:
-        path = filedialog.asksaveasfilename(
-            parent=self,
-            defaultextension=".csv",
-            initialfile=f"{self.competition.short_title}_{self.season_key}_knockout.csv",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+    def _open_export_menu(self) -> None:
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(label="TXT", command=self._export_txt)
+        menu.add_command(label="JSON", command=self._export_json)
+        menu.add_command(label="Excel", command=self._export_excel)
+        x, y, height = self._export_menu_anchor
+        menu.tk_popup(
+            int(self.canvas.winfo_rootx() + x),
+            int(self.canvas.winfo_rooty() + y + height),
         )
-        if not path:
-            return
-        rows = [["round", "date", "home", "home_score", "away", "away_score", "note"]]
+
+    def _export_rows(self) -> list[list[object]]:
+        headers = self.strings.get("export_headers", ["round", "date", "home", "home_score", "away", "away_score", "note"])
+        rows: list[list[object]] = [headers if isinstance(headers, list) else ["round", "date", "home", "home_score", "away", "away_score", "note"]]
         for round_item in self._all_rounds():
             for match in round_item.matches:
                 rows.append([
@@ -897,24 +890,119 @@ class FinalStagesWindow(ctk.CTkToplevel):
                     match.away_score,
                     match.note,
                 ])
+        return rows
+
+    def _export_records(self) -> list[dict[str, object]]:
+        records: list[dict[str, object]] = []
+        for round_item in self._all_rounds():
+            for match in round_item.matches:
+                records.append({
+                    "round": self._round_name(round_item.name),
+                    "date": match.date,
+                    "home": match.home.name,
+                    "home_score": match.home_score,
+                    "away": match.away.name,
+                    "away_score": match.away_score,
+                    "note": match.note,
+                })
+        return records
+
+    def _default_export_name(self, suffix: str) -> str:
+        return f"{self.competition.short_title}_{self.season_key}_knockout.{suffix}"
+
+    def _export_txt(self) -> None:
+        filetypes = self._filetypes()
+        path = filedialog.asksaveasfilename(
+            parent=self,
+            defaultextension=".txt",
+            initialfile=self._default_export_name("txt"),
+            filetypes=[(filetypes["txt"], "*.txt"), (filetypes["all"], "*.*")],
+        )
+        if not path:
+            return
+        rows = self._export_rows()
+        widths = [max(len(str(row[index])) for row in rows) for index in range(len(rows[0]))]
+        lines = [
+            " | ".join(str(value).ljust(widths[index]) for index, value in enumerate(row))
+            for row in rows
+        ]
         try:
-            with open(path, "w", newline="", encoding="utf-8-sig") as file:
-                csv.writer(file).writerows(rows)
+            Path(path).write_text("\n".join(lines), encoding="utf-8")
         except OSError as exc:
-            messagebox.showerror("Export failed", str(exc), parent=self)
+            messagebox.showerror(str(self.strings["export_failed"]), str(exc), parent=self)
+            return
+        messagebox.showinfo(str(self.strings["export_complete"]), self._saved_message(path), parent=self)
+
+    def _export_json(self) -> None:
+        filetypes = self._filetypes()
+        path = filedialog.asksaveasfilename(
+            parent=self,
+            defaultextension=".json",
+            initialfile=self._default_export_name("json"),
+            filetypes=[(filetypes["json"], "*.json"), (filetypes["all"], "*.*")],
+        )
+        if not path:
+            return
+        payload = {
+            "competition": self.competition.key,
+            "season": self.season_key,
+            "matches": self._export_records(),
+        }
+        try:
+            Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError as exc:
+            messagebox.showerror(str(self.strings["export_failed"]), str(exc), parent=self)
+            return
+        messagebox.showinfo(str(self.strings["export_complete"]), self._saved_message(path), parent=self)
+
+    def _export_excel(self) -> None:
+        filetypes = self._filetypes()
+        path = filedialog.asksaveasfilename(
+            parent=self,
+            defaultextension=".xls",
+            initialfile=self._default_export_name("xls"),
+            filetypes=[(filetypes["excel"], "*.xls"), (filetypes["all"], "*.*")],
+        )
+        if not path:
+            return
+        rows = self._export_rows()
+        html_rows = "\n".join(
+            "<tr>" + "".join(f"<td>{escape(str(value))}</td>" for value in row) + "</tr>"
+            for row in rows
+        )
+        document = f"<html><body><table>{html_rows}</table></body></html>"
+        try:
+            Path(path).write_text(document, encoding="utf-8")
+        except OSError as exc:
+            messagebox.showerror(str(self.strings["export_failed"]), str(exc), parent=self)
+            return
+        messagebox.showinfo(str(self.strings["export_complete"]), self._saved_message(path), parent=self)
+
+    def _filetypes(self) -> dict[str, str]:
+        value = self.strings.get("filetypes", {})
+        return value if isinstance(value, dict) else {
+            "all": "All files",
+            "txt": "Text files",
+            "json": "JSON files",
+            "excel": "Excel files",
+        }
+
+    def _saved_message(self, path: str) -> str:
+        template = self.strings.get("saved", "Saved:\n{path}")
+        return str(template).format(path=path)
 
     def _round_name(self, name: str) -> str:
         normalized = _round_key(name, 0)
+        if "round_of_16" in normalized or "last_16" in normalized or "1_8" in normalized or "18" in normalized:
+            return self._text("round_of_16", "Round of 16")
         if "quarter" in normalized:
             return self._text("quarterfinals", "Quarterfinals")
         if "semi" in normalized:
             return self._text("semifinals", "Semifinals")
         if "final" in normalized and "semi" not in normalized:
             return self._text("final", "Final")
-        if "16" in normalized or "18" in normalized:
-            return "Round of 16"
         if "playoff" in normalized or "play" in normalized:
-            return "Play-off"
+            return self._text("play_off", "Play-off")
         return name
 
     def _text(self, key: str, fallback: str) -> str:
@@ -926,10 +1014,10 @@ class FinalStagesWindow(ctk.CTkToplevel):
 
     def _theme(self) -> dict[str, Any]:
         if self.competition.key == "ucl":
-            return {"bg1": "#15057A", "bg2": "#AAB0DC", "box": "#2A347F", "export": "#2637A9", "logo_alpha": 0.24}
+            return {"bg1": "#15057A", "bg2": "#AAB0DC", "box": "#2A347F", "export": "#1F5D8D", "export_hover": "#2D75A8", "logo_alpha": 0.24}
         if self.competition.key == "uel":
-            return {"bg1": "#130D10", "bg2": "#E04B05", "box": "#D55B00", "export": "#8C4219", "logo_alpha": 0.36}
-        return {"bg1": "#032912", "bg2": "#00BE15", "box": "#13A500", "export": "#078B18", "logo_alpha": 0.34}
+            return {"bg1": "#130D10", "bg2": "#E04B05", "box": "#D55B00", "export": "#8C4219", "export_hover": "#A65320", "logo_alpha": 0.36}
+        return {"bg1": "#032912", "bg2": "#00BE15", "box": "#13A500", "export": "#078B18", "export_hover": "#0BA823", "logo_alpha": 0.34}
 
     def _x(self, value: float) -> float:
         return value * self._ui_scale

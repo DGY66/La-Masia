@@ -5,8 +5,10 @@ import csv
 import hashlib
 import logging
 import math
+import subprocess
 import tkinter as tk
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from tkinter import filedialog, messagebox
 from typing import Callable
@@ -150,7 +152,7 @@ class LeagueTableApp(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self._close_window)
 
         self.teams: list[Team] = []
-        self.last_update: str = self._display_timestamp(None)
+        self.last_update: str = self._resolve_last_update(None)
         self.is_fallback_data = False
         self.nav_buttons: list[ctk.CTkButton] = []
         self.logo_images: dict[str, tk.PhotoImage] = {}
@@ -180,7 +182,7 @@ class LeagueTableApp(ctk.CTk):
         self._fill_missing_forms(teams)
         self.teams = teams
         self.is_fallback_data = is_fallback
-        self.last_update = self._display_timestamp(last_update)
+        self.last_update = self._resolve_last_update(last_update)
         self._update_header()
         self._render_table()
 
@@ -191,7 +193,7 @@ class LeagueTableApp(ctk.CTk):
         self.competition = COMPETITIONS[competition_key]
         self.teams = []
         self.is_fallback_data = False
-        self.last_update = self._display_timestamp(None)
+        self.last_update = self._resolve_last_update(None)
         self._apply_competition_ui()
         self._render_table()
         self.after(50, self.refresh_from_api)
@@ -202,7 +204,7 @@ class LeagueTableApp(ctk.CTk):
         self.season_key = season_key
         self.teams = []
         self.is_fallback_data = False
-        self.last_update = self._display_timestamp(None)
+        self.last_update = self._resolve_last_update(None)
         self._update_header()
         self._render_table()
         self.after(50, self.refresh_from_api)
@@ -243,22 +245,43 @@ class LeagueTableApp(ctk.CTk):
             from mock_data import get_mock_teams
 
             teams = get_mock_teams(self.competition.key)
-            self.set_teams(teams, "20 Feb 2026", is_fallback=True)
+            self.set_teams(teams, None, is_fallback=True)
         except Exception:
-            self.last_update = "20 Feb 2026"
+            self.last_update = self._resolve_last_update(None)
             self._update_header()
 
     def _fill_missing_forms(self, teams: list[Team]) -> None:
         try:
             from mock_data import get_mock_teams
+            all_mock_teams = []
+            for key in ["ucl", "uel", "uecl"]:
+                try:
+                    all_mock_teams.extend(get_mock_teams(key))
+                except Exception:
+                    pass
         except Exception:
             return
 
-        mock_teams = get_mock_teams(self.competition.key)
-        mock_forms = {team.name.lower(): team.form for team in mock_teams}
+        if not all_mock_teams:
+            return
+
+        mock_forms = {}
+        for team in all_mock_teams:
+            if team.form:
+                mock_forms[team.name.lower()] = team.form
+
         for index, team in enumerate(teams):
             if not team.form:
-                team.form = mock_forms.get(team.name.lower(), mock_teams[index].form if index < len(mock_teams) else [])
+                form = mock_forms.get(team.name.lower())
+                if not form:
+                    for mock_name, mock_form in mock_forms.items():
+                        if mock_name in team.name.lower() or team.name.lower() in mock_name:
+                            form = mock_form
+                            break
+                if not form:
+                    form = all_mock_teams[index % len(all_mock_teams)].form
+                team.form = form
+
 
     def _is_unavailable_uecl_season(self) -> bool:
         return self.competition.key == "uecl" and self.season_key in {"1516", "1617", "1718", "1819", "1920", "2021"}
@@ -484,16 +507,30 @@ class LeagueTableApp(ctk.CTk):
 
         phase_labels = strings.get("phase_labels", {})
         season_label = next((item["label"] for item in SEASONS if item["key"] == self.season_key), "2025 / 26")
-        phase_template = phase_labels.get(self.season_key, "League Phase {season}") if isinstance(phase_labels, dict) else "League Phase {season}"
+        phase_template = (
+            phase_labels.get(self.season_key) or phase_labels.get("default") or "League Phase {season}"
+            if isinstance(phase_labels, dict)
+            else "League Phase {season}"
+        )
         if self.is_fallback_data:
-            subtitle = self.competition.mock_season_label
+            mock_template = strings.get("mock_phase_label") or "League Phase {season} (Mock data - API unavailable)"
+            subtitle = str(mock_template).format(season=season_label.replace(" ", ""))
         else:
             subtitle = str(phase_template).format(season=season_label.replace(" ", ""))
         self.season_label.configure(text=subtitle)
 
-        self.matchday_label.configure(text=self.competition.matchday_text)
+        # Dynamic matchday formatting with multilingual support
+        total_matchdays = 6 if (self.season_key in {"1516", "1617", "1718", "1819", "1920", "2021", "2122", "2223", "2324"} or self.competition.key == "uecl") else 8
+        current_matchday = max((team.pld for team in self.teams), default=total_matchdays)
+        if current_matchday == 0:
+            current_matchday = total_matchdays
+
+        matchday_template = strings.get("matchday", "Matchday {current} of {total}")
+        matchday_str = str(matchday_template).format(current=current_matchday, total=total_matchdays)
+        self.matchday_label.configure(text=matchday_str)
+
         self.timestamp_label.configure(text=f"{strings['last_updated']}: {self.last_update}")
-        self.title(f"{title} · {season_label}")
+        self.title(f"{title} - {season_label}")
 
     def _rebuild_nav(self) -> None:
         for widget in self.nav_frame.winfo_children():
@@ -725,6 +762,13 @@ class LeagueTableApp(ctk.CTk):
         frame.grid(row=0, column=column, padx=(0, 0))
         frame.grid_propagate(False)
 
+        image = self._get_remote_image(team.team_logo_url, f"logo:{team.team_id or team.name}", 40, 40)
+        if image is not None:
+            label = tk.Label(frame, image=image, bd=0, highlightthickness=0, bg=self.theme["table"])
+            label.image = image
+            label.place(relx=0.5, rely=0.5, anchor="center")
+            return
+
         if team.espn_id is not None:
             label = ctk.CTkLabel(frame, text="", image=self.espn_logo_placeholder)
             label.image = self.espn_logo_placeholder
@@ -745,13 +789,6 @@ class LeagueTableApp(ctk.CTk):
                 (40, 40),
                 lambda image, target=label: self._set_ctk_image(target, image),
             )
-            return
-
-        image = self._get_remote_image(team.team_logo_url, f"logo:{team.team_id or team.name}", 40, 40)
-        if image is not None:
-            label = tk.Label(frame, image=image, bd=0, highlightthickness=0, bg=self.theme["table"])
-            label.image = image
-            label.place(relx=0.5, rely=0.5, anchor="center")
             return
 
         canvas = tk.Canvas(frame, width=40, height=40, highlightthickness=0, bd=0, bg=self.theme["table"])
@@ -878,14 +915,11 @@ class LeagueTableApp(ctk.CTk):
         disk_key = hashlib.sha256(url.encode("utf-8")).hexdigest()
         cache_path = IMAGE_CACHE_DIR / f"{disk_key}{suffix}"
 
-        raw: bytes | None = None
         try:
             if cache_path.exists():
                 raw = cache_path.read_bytes()
             else:
-                request = Request(url, headers=REMOTE_HEADERS)
-                with urlopen(request, timeout=4) as response:
-                    raw = response.read()
+                raw = self._fetch_remote_image_bytes(url)
                 if raw:
                     cache_path.write_bytes(raw)
         except (HTTPError, URLError, TimeoutError, OSError) as exc:
@@ -896,14 +930,38 @@ class LeagueTableApp(ctk.CTk):
             return None
 
         try:
-            image = tk.PhotoImage(data=base64.b64encode(raw).decode("ascii"))
-            scale = max(1, math.ceil(image.width() / max_width), math.ceil(image.height() / max_height))
-            if scale > 1:
-                image = image.subsample(scale, scale)
+            from PIL import Image, ImageTk
+
+            pil_image = Image.open(BytesIO(raw)).convert("RGBA")
+            pil_image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+            image = ImageTk.PhotoImage(pil_image)
             self.logo_images[key] = image
             return image
-        except tk.TclError:
+        except Exception:
             return None
+
+    @staticmethod
+    def _fetch_remote_image_bytes(url: str) -> bytes:
+        try:
+            request = Request(url, headers=REMOTE_HEADERS)
+            with urlopen(request, timeout=4) as response:
+                return response.read()
+        except HTTPError as exc:
+            if exc.code != 403:
+                raise
+
+        command = ["curl.exe", "-s", "-L", "--max-time", "10"]
+        for key, value in REMOTE_HEADERS.items():
+            command.extend(["-H", f"{key}: {value}"])
+        command.append(url)
+
+        result = subprocess.run(command, capture_output=True, check=False)
+        if result.returncode != 0:
+            stderr = result.stderr.decode("utf-8", errors="ignore").strip()
+            raise OSError(stderr or f"curl failed with exit code {result.returncode}")
+        if not result.stdout:
+            raise OSError("empty image response")
+        return result.stdout
 
     def _draw_logo_fallback(self, canvas: tk.Canvas) -> None:
         canvas.delete("all")
@@ -986,6 +1044,21 @@ class LeagueTableApp(ctk.CTk):
                     continue
             return value
         return datetime.now().strftime("%d %b %Y")
+
+    def _resolve_last_update(self, value: str | None) -> str:
+        if value:
+            return self._display_timestamp(value)
+        if self.season_key == "2526":
+            return self._display_timestamp(None)
+        # Determine finished season end date
+        try:
+            if len(self.season_key) == 4 and self.season_key.isdigit():
+                end_year = 2000 + int(self.season_key[2:])
+                return datetime(end_year, 6, 30).strftime("%d %b %Y")
+        except Exception:
+            pass
+        return self._display_timestamp(None)
+
 
     @staticmethod
     def _set_ctk_image(label: ctk.CTkLabel, image: ctk.CTkImage) -> None:
